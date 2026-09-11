@@ -1,0 +1,1228 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="庫存核對">
+<title>倉庫庫存核對</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  :root {
+    --bg: #F4F4F1;
+    --card: #FFFFFF;
+    --ink: #1C1C1A;
+    --ink-soft: #6B6B64;
+    --line: #DEDED6;
+    --accent: #1E5AA8;
+    --accent-soft: #E7EFF9;
+    --warn: #B4530A;
+    --ok: #276B3A;
+    --ok-soft: #E5F1E8;
+    --partial: #9A6B0C;
+    --partial-soft: #F5ECD9;
+    --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    -webkit-tap-highlight-color: transparent; }
+  #app { max-width: 720px; margin: 0 auto; padding-bottom: 48px; }
+
+  header { position: sticky; top: 0; z-index: 10; background: var(--bg);
+    padding: 14px 14px 10px; border-bottom: 1px solid var(--line); }
+  h1 { font-size: 19px; margin: 0 0 10px; letter-spacing: -0.01em; }
+  .progress { font-size: 12.5px; color: var(--ink-soft); margin-bottom: 3px; }
+  .progress b { color: var(--ink); }
+  .export-row { display: flex; gap: 8px; margin-bottom: 6px; }
+  .export-btn { flex: 1.3; padding: 11px; border: none; border-radius: 9px;
+    background: var(--accent); color: #fff; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .import-btn { flex: 1; padding: 11px; border: 1px solid var(--line); border-radius: 9px;
+    background: var(--card); color: var(--ink-soft); font-size: 13px; cursor: pointer; }
+  .export-hint { font-size: 11px; color: var(--ink-soft); margin-bottom: 10px; line-height: 1.5; }
+  .sync-status { font-size: 11.5px; color: var(--ink-soft); margin-bottom: 6px; }
+  .gsetup-panel { background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px; margin-bottom: 8px; }
+  .gsetup-panel input { width: 100%; padding: 9px 10px; border: 1px solid var(--line);
+    border-radius: 7px; font-size: 13px; margin-bottom: 8px; font-family: var(--mono); }
+  .gsetup-panel .save-client-id-btn { width: 100%; padding: 9px; border: none;
+    border-radius: 7px; background: var(--accent); color: #fff; font-size: 13.5px;
+    font-weight: 600; cursor: pointer; }
+  .google-auth-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
+  .login-btn { flex: 1; padding: 10px; border: none; border-radius: 8px;
+    background: var(--accent); color: #fff; font-size: 13.5px; font-weight: 600; cursor: pointer; }
+  .login-btn.signed-in { background: var(--ok); }
+  .test-drive-btn-sm { padding: 10px 12px; border: 1px solid var(--line); background: var(--card);
+    color: var(--ink-soft); border-radius: 8px; font-size: 12.5px; cursor: pointer; }
+  .settings-link { padding: 10px 12px; border: 1px solid var(--line); background: var(--card);
+    color: var(--ink-soft); border-radius: 8px; font-size: 14px; cursor: pointer; }
+  .sync-status.ok { color: var(--ok); }
+  .sync-status.fail { color: var(--warn); }
+  .test-drive-btn { display: block; width: 100%; font-size: 11.5px; color: var(--accent);
+    background: var(--accent-soft); border: 1px solid #C9DBEF; border-radius: 6px;
+    padding: 6px 10px; margin-bottom: 8px; cursor: pointer; }
+  .debug-panel { font-family: var(--mono); font-size: 10.5px; line-height: 1.5;
+    white-space: pre-wrap; word-break: break-all; background: #1C1C1A; color: #D8D8D0;
+    border-radius: 7px; padding: 8px 10px; max-height: 180px; overflow-y: auto;
+    margin-bottom: 8px; }
+  .pending-summary { display: flex; align-items: center; justify-content: space-between;
+    gap: 8px; font-size: 11.5px; color: var(--warn); background: #FBEFE3;
+    border: 1px solid #EAD3AE; border-radius: 7px; padding: 6px 10px; margin-bottom: 10px; }
+  .pending-summary button { border: 1px solid var(--warn); background: #fff; color: var(--warn);
+    font-size: 11px; font-weight: 600; border-radius: 6px; padding: 4px 9px; cursor: pointer;
+    flex-shrink: 0; }
+
+  .search-wrap { position: relative; }
+  #search { width: 100%; padding: 11px 36px 11px 12px; font-size: 15px;
+    border: 1px solid var(--line); border-radius: 9px; background: var(--card);
+    color: var(--ink); }
+  #search:focus { outline: none; border-color: var(--accent); }
+  .search-clear { position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+    border: none; background: none; color: var(--ink-soft); font-size: 18px;
+    padding: 4px 6px; cursor: pointer; display: none; }
+
+  #list { padding: 10px 12px 0; }
+  .loc-group { margin-bottom: 14px; }
+  .loc-head { font-family: var(--mono); font-size: 12.5px; color: var(--ink-soft);
+    padding: 6px 2px; letter-spacing: 0.02em; }
+
+  .item { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    margin-bottom: 8px; overflow: hidden; }
+  .item.confirmed { border-color: var(--ok); background: var(--ok-soft); }
+  .item.confirmed.not-pallet { border-color: var(--partial); background: var(--partial-soft); }
+  .item.discrepancy .item-summary { box-shadow: inset 3px 0 0 var(--warn); }
+  .item-summary { padding: 12px 13px; cursor: pointer; display: flex;
+    justify-content: space-between; align-items: center; gap: 10px; }
+  .item-main { min-width: 0; }
+  .item-name { font-size: 14.5px; font-weight: 600; line-height: 1.35;
+    overflow: hidden; text-overflow: ellipsis; display: -webkit-box;
+    -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .item-sub { font-family: var(--mono); font-size: 12px; color: var(--ink-soft);
+    margin-top: 3px; display: flex; align-items: center; gap: 6px; }
+  .flag-chip { font-size: 10px; font-family: -apple-system, sans-serif; font-weight: 600;
+    padding: 1px 6px; border-radius: 8px; background: var(--warn); color: #fff; }
+  .item-qty { flex-shrink: 0; text-align: right; }
+  .item-qty .n { font-size: 18px; font-weight: 700; }
+  .item-qty .u { font-size: 11px; color: var(--ink-soft); display: block; }
+  .badge-ok { flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%;
+    background: var(--ok); color: #fff; font-size: 13px; display: flex;
+    align-items: center; justify-content: center; }
+  .badge-ok.not-pallet { background: var(--partial); }
+
+  .item-detail { border-top: 1px solid var(--line); padding: 13px; background: #FAFAF8; }
+  .spec-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+    margin-bottom: 12px; }
+  .spec { background: var(--card); border: 1px solid var(--line); border-radius: 7px;
+    padding: 7px 6px; text-align: center; }
+  .spec .v { font-family: var(--mono); font-size: 13.5px; font-weight: 600; }
+  .spec .k { font-size: 10px; color: var(--ink-soft); margin-top: 2px; }
+  .spec.spec-correct { background: var(--ok-soft); border-color: var(--ok); }
+  .spec.spec-incorrect { background: #FBE5E1; border-color: #C0392B; }
+  .spec-verify-row { display: flex; gap: 8px; margin-bottom: 12px; }
+  .spec-verify-btn { flex: 1; padding: 9px 6px; border-radius: 8px; font-size: 12.5px;
+    font-weight: 600; cursor: pointer; text-align: center; }
+  .spec-verify-btn.correct { border: 1px solid var(--ok); background: var(--card); color: var(--ok); }
+  .spec-verify-btn.correct.active { background: var(--ok); color: #fff; }
+  .spec-verify-btn.incorrect { border: 1px solid #C0392B; background: var(--card); color: #C0392B; }
+  .spec-verify-btn.incorrect.active { background: #C0392B; color: #fff; }
+  .spec-verify-note { font-size: 11px; color: var(--ink-soft); margin: -6px 0 12px; }
+
+  label.field-label { display: block; font-size: 12px; color: var(--ink-soft);
+    margin-bottom: 5px; }
+  textarea#remark-input { width: 100%; min-height: 60px; padding: 9px 10px;
+    border: 1px solid var(--line); border-radius: 8px; font-size: 14px;
+    font-family: inherit; resize: vertical; background: var(--card); color: var(--ink); }
+  textarea#remark-input:focus { outline: none; border-color: var(--accent); }
+
+  .photo-row { display: flex; align-items: center; gap: 10px; margin: 12px 0; flex-wrap: wrap; }
+  .photo-thumb-wrap { position: relative; flex-shrink: 0; }
+  .photo-thumb-wrap .remove-photo-btn { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px;
+    border-radius: 50%; background: var(--ink); color: #fff; border: 2px solid var(--bg);
+    font-size: 11px; line-height: 1; display: flex; align-items: center; justify-content: center;
+    cursor: pointer; padding: 0; }
+  .photo-thumb-wrap .status-badge { position: absolute; bottom: -5px; left: -5px; width: 18px; height: 18px;
+    border-radius: 50%; font-size: 10px; display: flex; align-items: center; justify-content: center;
+    border: 2px solid var(--bg); }
+  .status-badge.uploading { background: var(--partial); color: #fff; }
+  .status-badge.uploaded { background: var(--ok); color: #fff; }
+  .status-badge.failed { background: #C0392B; color: #fff; cursor: pointer; }
+  .photo-thumb.uploading { opacity: 0.6; }
+  .photo-btn { border: 1px dashed var(--line); background: var(--card);
+    border-radius: 8px; padding: 10px 14px; font-size: 13.5px; color: var(--accent);
+    display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  .photo-thumb { width: 52px; height: 52px; border-radius: 8px; object-fit: cover;
+    border: 1px solid var(--line); }
+  .photo-status { font-size: 12px; color: var(--ink-soft); }
+
+  .flag-row { margin: 12px 0; }
+  .flag-btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line);
+    background: var(--card); border-radius: 20px; padding: 8px 14px; font-size: 13px;
+    color: var(--ink-soft); cursor: pointer; }
+  .flag-btn.active { border-color: var(--warn); background: #FBEFE3; color: var(--warn); font-weight: 600; }
+
+  .confirm-btn { width: 100%; padding: 13px; border: none; border-radius: 9px;
+    background: var(--accent); color: #fff; font-size: 15px; font-weight: 600;
+    cursor: pointer; }
+  .confirm-btn:disabled { background: var(--ink-soft); }
+  .confirm-btn.is-confirmed { background: var(--ok); }
+  .confirm-btn.secondary { background: var(--card); border: 1px solid var(--partial);
+    color: var(--partial); margin-top: 8px; font-size: 13.5px; padding: 11px; }
+  .confirm-btn.secondary.is-confirmed { background: var(--partial); color: #fff; }
+  .undo-btn { width: 100%; margin-top: 8px; padding: 9px; border: 1px solid var(--line);
+    border-radius: 9px; background: var(--card); color: var(--ink-soft); font-size: 13px;
+    cursor: pointer; }
+
+  .meta-line { font-size: 11.5px; color: var(--ink-soft); margin-top: 8px; }
+  .empty { text-align: center; color: var(--ink-soft); padding: 40px 20px; font-size: 14px; }
+
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+    background: var(--ink); color: #fff; padding: 10px 18px; border-radius: 20px;
+    font-size: 13.5px; opacity: 0; pointer-events: none; transition: opacity .25s; z-index: 50; }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>倉庫庫存核對</h1>
+    <div class="progress" id="progress">載入中…</div>
+
+    <div class="export-row">
+      <button class="export-btn" id="export-btn" type="button">📤 匯出/分享進度</button>
+      <button class="import-btn" id="import-btn" type="button">📥 匯入進度</button>
+      <input type="file" id="import-file-input" accept="application/json" style="display:none">
+    </div>
+    <div class="export-hint">Google Drive自動同步係主要保存方法；「匯出」係額外一重保險，隨時可以做。</div>
+    <div class="pending-summary" id="photo-batch-row" style="display:none"></div>
+
+    <div class="sync-status" id="local-status">本機儲存：檢查緊…</div>
+    <div class="sync-status" id="sync-status">Google Drive：—</div>
+
+    <div class="gsetup-panel" id="gsetup-panel" style="display:none">
+      <label class="field-label" for="client-id-input">貼上你嘅 Google OAuth Client ID</label>
+      <input id="client-id-input" type="text" placeholder="xxxxxxxx.apps.googleusercontent.com">
+      <button class="save-client-id-btn" id="save-client-id-btn" type="button">儲存</button>
+    </div>
+    <div class="google-auth-row" id="google-auth-row" style="display:none">
+      <button class="login-btn" id="login-btn" type="button">🔑 登入 Google</button>
+      <button class="test-drive-btn-sm" id="test-drive-btn" type="button">測試連接</button>
+      <button class="settings-link" id="settings-link" type="button">⚙</button>
+    </div>
+    <div class="debug-panel" id="debug-panel" style="display:none"></div>
+    <div class="search-wrap">
+      <input id="search" type="text" placeholder="輸入庫位 / SKU名稱 / 條碼搜索" autocomplete="off">
+      <button class="search-clear" id="search-clear">✕</button>
+    </div>
+  </header>
+  <div id="list"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------- inventory data (from uploaded report, sorted by location) ---------- */
+const INVENTORY = [{"loc":"B01-01-0101","sku":"RA011G-UKSSS","barcode":"855316004958","name":"Reactor 100 UK BLK","qty":24,"l":58.6,"w":51.8,"h":31,"wt":16.5},{"loc":"B01-01-0102","sku":"RA011G-UKSSS","barcode":"855316004958","name":"Reactor 100 UK BLK","qty":24,"l":58.6,"w":51.8,"h":31,"wt":16.5},{"loc":"B01-02-0101","sku":"RA011G-UKSSS","barcode":"855316004958","name":"Reactor 100 UK BLK","qty":24,"l":58.6,"w":51.8,"h":31,"wt":16.5},{"loc":"B01-02-0103","sku":"RA011G-UKSSS","barcode":"855316004958","name":"Reactor 100 UK BLK","qty":24,"l":58.6,"w":51.8,"h":31,"wt":16.5},{"loc":"B01-03-0102","sku":"RA011G-UKSSS","barcode":"855316004958","name":"Reactor 100 UK BLK","qty":28,"l":58.6,"w":51.8,"h":31,"wt":16.5},{"loc":"B01-03-0103","sku":"RA011G-UKSSS","barcode":"855316004958","name":"Reactor 100 UK BLK","qty":20,"l":58.6,"w":51.8,"h":31,"wt":16.5},{"loc":"B01-04-0102","sku":"RA011G-UKSSS","barcode":"855316004958","name":"Reactor 100 UK BLK","qty":1,"l":58.6,"w":51.8,"h":31,"wt":16.5},{"loc":"B01-04-0103","sku":"RA011G-UKSSS","barcode":"855316004958","name":"Reactor 100 UK BLK","qty":24,"l":58.6,"w":51.8,"h":31,"wt":16.5},{"loc":"B01-05-0101","sku":"RA011G-UKSSS","barcode":"855316004958","name":"Reactor 100 UK BLK","qty":24,"l":58.6,"w":51.8,"h":31,"wt":16.5},{"loc":"B01-05-0102","sku":"RA011G-UKSSS","barcode":"855316004958","name":"Reactor 100 UK BLK","qty":24,"l":58.6,"w":51.8,"h":31,"wt":16.5},{"loc":"B01-05-0103","sku":"RA011G-UKSSS","barcode":"855316004958","name":"Reactor 100 UK BLK","qty":24,"l":58.6,"w":51.8,"h":31,"wt":16.5},{"loc":"B01-06-0101","sku":"RA011G-UKSSS","barcode":"855316004958","name":"Reactor 100 UK BLK","qty":24,"l":58.6,"w":51.8,"h":31,"wt":16.5},{"loc":"B01-06-0102","sku":"RA011G-UKSSS","barcode":"855316004958","name":"Reactor 100 UK BLK","qty":24,"l":58.6,"w":51.8,"h":31,"wt":16.5},{"loc":"B01-06-0201","sku":"RA011G-UKSSS","barcode":"855316004958","name":"Reactor 100 UK BLK","qty":24,"l":58.6,"w":51.8,"h":31,"wt":16.5},{"loc":"B01-07-0103","sku":"RA011G-UKSSS","barcode":"855316004958","name":"Reactor 100 UK BLK","qty":24,"l":58.6,"w":51.8,"h":31,"wt":16.5},{"loc":"B01-10-0101","sku":"RA011G-UKSSS","barcode":"855316004958","name":"Reactor 100 UK BLK","qty":24,"l":58.6,"w":51.8,"h":31,"wt":16.5},{"loc":"B01-10-0102","sku":"RA011G-UKSSS","barcode":"855316004958","name":"Reactor 100 UK BLK","qty":23,"l":58.6,"w":51.8,"h":31,"wt":16.5},{"loc":"B01-10-0103","sku":"RA011G-UKSSS","barcode":"855316004958","name":"Reactor 100 UK BLK","qty":22,"l":58.6,"w":51.8,"h":31,"wt":16.5},{"loc":"B02-01-0101","sku":"RA011G-UKSSS","barcode":"855316004958","name":"Reactor 100 UK BLK","qty":24,"l":58.6,"w":51.8,"h":31,"wt":16.5},{"loc":"B02-01-0102","sku":"RA011G-UKSSS","barcode":"855316004958","name":"Reactor 100 UK BLK","qty":24,"l":58.6,"w":51.8,"h":31,"wt":16.5},{"loc":"B03-10-0102","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"B07-03-0102","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"B07-03-0103","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"B08-01-0201","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"B08-01-0202","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"B08-02-0201","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"B08-03-0201","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"B08-04-0101","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"B09-04-0202","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"B10-08-0103","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"B10-10-0102","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"B11-03-0103","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"B11-10-0101","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"B11-10-0103","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"B12-04-0101","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"B12-04-0103","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"B12-06-0102","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"B12-07-0101","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"B12-08-0103","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"B12-10-0101","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D01-01-0101","sku":"S5012G-UKSSS","barcode":"0855316004545","name":"Spark 2 Pearl","qty":5,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D01-01-0101","sku":"S5012G-UKSSS","barcode":"0855316004545","name":"Spark 2 Pearl","qty":30,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D01-01-0102","sku":"S5012G-UKSSS","barcode":"0855316004545","name":"Spark 2 Pearl","qty":40,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D01-01-0103","sku":"SF011G-UKSS_FBA","barcode":"SF011G-UKSS_FBA","name":"Spark Live UK BLK","qty":19,"l":43,"w":34,"h":56,"wt":16},{"loc":"D01-01-0103","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":4,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D01-01-0103","sku":"RA011G-UKSSS","barcode":"855316004958","name":"Reactor 100 UK BLK","qty":3,"l":58.6,"w":51.8,"h":31,"wt":16.5},{"loc":"D01-02-0101","sku":"RPD11M-UKSSS","barcode":"855316004989","name":"Reactor Control","qty":24,"l":22,"w":11,"h":8,"wt":0.77},{"loc":"D01-02-0101","sku":"RPD11M-UKSSS","barcode":"855316004989","name":"Reactor Control","qty":15,"l":22,"w":11,"h":8,"wt":0.77},{"loc":"D01-02-0102","sku":"IR121C-UNSSS","barcode":"IR121C-UNSSS","name":"RIFF - Black","qty":11,"l":15.8,"w":10,"h":6.1,"wt":0.287},{"loc":"D01-02-0102","sku":"MMESEBOCI00B5","barcode":"MMESEBOCI00B5","name":"DC Plug Adapter","qty":5,"l":12.5,"w":8,"h":1,"wt":0.07},{"loc":"D01-02-0201","sku":"RPD11M-UKSSS","barcode":"855316004989","name":"Reactor Control","qty":92,"l":22,"w":11,"h":8,"wt":0.77},{"loc":"D01-02-0201","sku":"RPD11M-UKSSS","barcode":"855316004989","name":"Reactor Control","qty":20,"l":22,"w":11,"h":8,"wt":0.77},{"loc":"D01-02-0201","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D01-03-0101","sku":"SHP01E-UKSSS","barcode":"855316004866","name":"Spark NEO","qty":42,"l":23.2,"w":22,"h":7.95,"wt":0.79},{"loc":"D01-03-0102","sku":"S1013G-UKSSS","barcode":"S1013G-UKSSS","name":"Spark MINI Vai","qty":149,"l":20,"w":18,"h":18,"wt":1.85},{"loc":"D01-03-0102","sku":"S1013G-UKSSS","barcode":"S1013G-UKSSS","name":"Spark MINI Vai","qty":9,"l":20,"w":18,"h":18,"wt":1.85},{"loc":"D01-03-0103","sku":"SHP01E-UKSSS","barcode":"855316004866","name":"Spark NEO","qty":162,"l":23.2,"w":22,"h":7.95,"wt":0.79},{"loc":"D01-03-0103","sku":"SHP01E-UKSSS","barcode":"855316004866","name":"Spark NEO","qty":6,"l":23.2,"w":22,"h":7.95,"wt":0.79},{"loc":"D01-03-0201","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D01-03-0303","sku":"MMESEBOGI00BA","barcode":"00855316004644","name":"Spark EDGE Gille_Sunburst","qty":4,"l":37.7,"w":32.6,"h":1,"wt":0.79},{"loc":"D01-03-0303","sku":"S0511G-UKSSS","barcode":"S0511G-UKSSS","name":"Spark Go","qty":16,"l":17,"w":12.5,"h":8,"wt":0.61},{"loc":"D01-03-0303","sku":"S1013G-UKSSS","barcode":"S1013G-UKSSS","name":"Spark MINI Vai","qty":85,"l":20,"w":18,"h":18,"wt":1.85},{"loc":"D01-03-0303","sku":"SWL21M-UKSSS","barcode":"855316004910","name":"Spark Link XLR BLK UK","qty":43,"l":10.9,"w":2.5,"h":2.7,"wt":0.18},{"loc":"D01-04-0102","sku":"S040CB9-UKBS","barcode":"S040CB9-UKBS","name":"Spark 40","qty":24,"l":49,"w":28,"h":27,"wt":7.2},{"loc":"D01-04-0102","sku":"S040CB9-UKBS","barcode":"S040CB9-UKBS","name":"Spark 40","qty":5,"l":49,"w":28,"h":27,"wt":7.2},{"loc":"D01-04-0103","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D01-04-0201","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D01-04-0202","sku":"SPD11M-UKSS","barcode":"SPD11M259006993","name":"Spark Control X","qty":260,"l":22,"w":10,"h":9.5,"wt":0.71},{"loc":"D01-04-0203","sku":"SF011G-UKSS_FBA","barcode":"SF011G-UKSS_FBA","name":"Spark Live UK BLK","qty":10,"l":43,"w":34,"h":56,"wt":16},{"loc":"D01-05-0101","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D01-05-0102","sku":"SPD11M-UKSS","barcode":"855316004811","name":"Spark Control X","qty":320,"l":22,"w":10,"h":9.5,"wt":0.71},{"loc":"D01-05-0103","sku":"SF011G-UKSS_FBA","barcode":"SF011G-UKSS_FBA","name":"Spark Live UK BLK","qty":19,"l":43,"w":34,"h":56,"wt":16},{"loc":"D01-05-0201","sku":"SF011G-UKSS","barcode":"SF011G-UKSS","name":"Spark Live UK BLK","qty":24,"l":56,"w":43,"h":34,"wt":16},{"loc":"D01-05-0202","sku":"SF011G-UKSS","barcode":"SF011G-UKSS","name":"Spark Live UK BLK","qty":24,"l":56,"w":43,"h":34,"wt":16},{"loc":"D01-05-0203","sku":"S040CBB-UKBS","barcode":"S040CBB-UKBS","name":"Spark Pearl UK","qty":12,"l":49,"w":28,"h":27,"wt":7.1},{"loc":"D01-05-0303","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":16,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D01-06-0101","sku":"S5012G-UKSSS","barcode":"0855316004545","name":"Spark 2 Pearl","qty":40,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D01-06-0102","sku":"SHP01E-UKSSS","barcode":"855316004866","name":"Spark NEO","qty":280,"l":23.2,"w":22,"h":7.95,"wt":0.79},{"loc":"D01-06-0103","sku":"SF011G-UKSS","barcode":"SF011G-UKSS","name":"Spark Live UK BLK","qty":24,"l":56,"w":43,"h":34,"wt":16},{"loc":"D01-06-0201","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D01-06-0201-HOLD","sku":"SE011M-UKSS_FBA","barcode":"SE011M-UKSS_FBA","name":"Spark CAB UK Black","qty":1,"l":46,"w":32,"h":61,"wt":15.8},{"loc":"D01-06-0301","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D01-06-0302","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D01-06-0303","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D01-07-0101","sku":"S6511G-UKSSS","barcode":"855316004774","name":"Spark EDGE UK BLK","qty":24,"l":38,"w":34,"h":42,"wt":8.8},{"loc":"D01-07-0102","sku":"SPL11G-UKSSS","barcode":"855316004996","name":"Spark Pedal","qty":64,"l":20.1,"w":12.2,"h":9.55,"wt":0.89},{"loc":"D01-07-0103","sku":"S6511G-UKSSS","barcode":"855316004774","name":"Spark EDGE UK BLK","qty":24,"l":38,"w":34,"h":42,"wt":8.8},{"loc":"D01-07-0201","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D01-07-0202","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D01-07-0203","sku":"S040CBB-UKBS","barcode":"855316004552","name":"Spark Pearl UK","qty":8,"l":49,"w":28,"h":27,"wt":7.1},{"loc":"D01-07-0301","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D01-07-0302","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D01-07-0303","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D01-08-0101","sku":"S040CBB-UKBS","barcode":"855316004552","name":"Spark Pearl UK","qty":52,"l":49,"w":28,"h":27,"wt":7.1},{"loc":"D01-08-0102","sku":"S040CBB-UKBS","barcode":"855316004552","name":"Spark Pearl UK","qty":56,"l":49,"w":28,"h":27,"wt":7.1},{"loc":"D01-08-0103","sku":"SPD0-FW004","barcode":"855316004705","name":"Spark Controller","qty":230,"l":26.5,"w":8,"h":5,"wt":0.6},{"loc":"D01-08-0103","sku":"SF011G-UKSS_FBA","barcode":"SF011G-UKSS_FBA","name":"Spark Live UK BLK","qty":6,"l":43,"w":34,"h":56,"wt":16},{"loc":"D01-08-0202","sku":"S040CBB-UKBS","barcode":"855316004552","name":"Spark Pearl UK","qty":48,"l":49,"w":28,"h":27,"wt":7.1},{"loc":"D01-09-0101","sku":"S1012G-UKSSS","barcode":"855316004729","name":"Spark MINI Pearl","qty":14,"l":20.5,"w":18,"h":18.5,"wt":1.7},{"loc":"D01-09-0102","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D01-09-0103","sku":"SF011G-UKSS_FBA","barcode":"SF011G-UKSS_FBA","name":"Spark Live UK BLK","qty":7,"l":43,"w":34,"h":56,"wt":16},{"loc":"D01-09-0201","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":8,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D01-10-0103","sku":"SPL11G-UKSSS","barcode":"855316004996","name":"Spark Pedal","qty":196,"l":20.1,"w":12.2,"h":9.55,"wt":0.89},{"loc":"D01-10-0103","sku":"SPL11G-UKSSS","barcode":"855316004996","name":"Spark Pedal","qty":101,"l":20.1,"w":12.2,"h":9.55,"wt":0.89},{"loc":"D01-11-0102","sku":"S5011G-UKBSS","barcode":"00855316004606","name":"SPARK 2 Handbag","qty":51,"l":49,"w":28,"h":13,"wt":0.68},{"loc":"D01-11-0103","sku":"S5011G-UKBSS","barcode":"00855316004606","name":"SPARK 2 Handbag","qty":160,"l":49,"w":28,"h":13,"wt":0.68},{"loc":"D01-11-0203-HOLD","sku":"IR121C-UNSSS","barcode":"IR121C-UNSSS","name":"RIFF - Black","qty":9,"l":15.8,"w":10,"h":6.1,"wt":0.287},{"loc":"D01-11-0303","sku":"S040BG1-UKBS","barcode":"S040BG1-UKBS","name":"Spark 40","qty":4,"l":40,"w":23,"h":9,"wt":0.68},{"loc":"D02-01-0102","sku":"MMES0BOBAA023","barcode":"855316004798","name":"Spark Battery 6000mAh UK","qty":45,"l":13,"w":9.3,"h":9,"wt":0.54},{"loc":"D02-02-0102","sku":"S040CBB-UKBS","barcode":"S040CBB-UKBS","name":"Spark Pearl UK","qty":24,"l":49,"w":28,"h":27,"wt":7.1},{"loc":"D02-02-0103","sku":"S040CBB-UKBS","barcode":"S040CBB-UKBS","name":"Spark Pearl UK","qty":56,"l":49,"w":28,"h":27,"wt":7.1},{"loc":"D02-03-0102","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":25,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D02-03-0103","sku":"SF011G-UKSS","barcode":"SF011G-UKSS","name":"Spark Live UK BLK","qty":7,"l":56,"w":43,"h":34,"wt":16},{"loc":"D02-03-0103","sku":"SF011G-UKSS","barcode":"SF011G-UKSS","name":"Spark Live UK BLK","qty":2,"l":56,"w":43,"h":34,"wt":16},{"loc":"D02-04-0101","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D02-04-0102","sku":"SF011G-UKSS","barcode":"SF011G-UKSS","name":"Spark Live UK BLK","qty":24,"l":56,"w":43,"h":34,"wt":16},{"loc":"D02-04-0103","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D02-05-0101","sku":"SF011G-UKSS_FBA","barcode":"SF011G-UKSS_FBA","name":"Spark Live UK BLK","qty":16,"l":43,"w":34,"h":56,"wt":16},{"loc":"D02-05-0102","sku":"SF011G-UKSS_FBA","barcode":"SF011G-UKSS_FBA","name":"Spark Live UK BLK","qty":12,"l":43,"w":34,"h":56,"wt":16},{"loc":"D02-05-0103","sku":"SF011G-UKSS_FBA","barcode":"SF011G-UKSS_FBA","name":"Spark Live UK BLK","qty":18,"l":43,"w":34,"h":56,"wt":16},{"loc":"D02-06-0102","sku":"S1012G-UKSSS","barcode":"855316004729","name":"Spark MINI Pearl","qty":74,"l":20.5,"w":18,"h":18.5,"wt":1.7},{"loc":"D02-06-0102","sku":"S1012G-UKSSS","barcode":"855316004729","name":"Spark MINI Pearl","qty":4,"l":20.5,"w":18,"h":18.5,"wt":1.7},{"loc":"D02-06-0103","sku":"MPD00077031","barcode":"MPD00077031","name":"MPD00077031","qty":9,"l":30,"w":3,"h":1,"wt":1},{"loc":"D02-06-0103","sku":"MWS01554011","barcode":"MWS01554011","name":"MWS01554011","qty":8,"l":20,"w":2,"h":1,"wt":1},{"loc":"D02-06-0103","sku":"PAS03913001","barcode":"PAS03913001","name":"Spark 2 Handle Strap (BK)","qty":44,"l":30,"w":4,"h":1,"wt":0.08},{"loc":"D02-06-0103","sku":"PAS03914001","barcode":"PAS03914001","name":"Spark 2 Handle Strap (WHT)","qty":50,"l":30,"w":4,"h":0.1,"wt":0.08},{"loc":"D02-06-0103","sku":"PAS03915001","barcode":"PAS03915001","name":"Type C cable","qty":29,"l":8,"w":4,"h":1,"wt":0.01},{"loc":"D02-06-0103","sku":"PAS03916001","barcode":"PAS03916001","name":"Spark 2 PSU","qty":51,"l":20,"w":5,"h":4,"wt":0.2},{"loc":"D02-06-0103","sku":"PAS03918001","barcode":"PAS03918001","name":"Spark 2 UK Power cable","qty":46,"l":20,"w":5,"h":4,"wt":0.1},{"loc":"D02-06-0103","sku":"165-00500UO00-E","barcode":"165-00500UO00-E","name":"Spark LINK USB Y cable (A to C)","qty":38,"l":10,"w":4,"h":1,"wt":8},{"loc":"D02-06-0103","sku":"PAS04123001(No Box)","barcode":"PAS04123001(No Box)","name":"PAS04123001","qty":15,"l":22.5,"w":13.5,"h":5,"wt":0.4},{"loc":"D02-07-0101","sku":"SF011G-UKSS_FBA","barcode":"SF011G-UKSS_FBA","name":"Spark Live UK BLK","qty":17,"l":43,"w":34,"h":56,"wt":16},{"loc":"D02-07-0102","sku":"SF011G-UKSS_FBA","barcode":"SF011G-UKSS_FBA","name":"Spark Live UK BLK","qty":20,"l":43,"w":34,"h":56,"wt":16},{"loc":"D02-07-0103","sku":"S0511G-UKSSS","barcode":"S0511G-UKSSS","name":"Spark Go","qty":30,"l":17,"w":12.5,"h":8,"wt":0.61},{"loc":"D02-07-0103","sku":"S0511G-UKSSS","barcode":"S0511G-UKSSS","name":"Spark Go","qty":50,"l":17,"w":12.5,"h":8,"wt":0.61},{"loc":"D02-08-0101","sku":"S0512G-UKSSS","barcode":"S0512G-UKSSS","name":"Spark Go 白色","qty":281,"l":16.9,"w":12.6,"h":8,"wt":0.6},{"loc":"D02-08-0101","sku":"S0512G-UKSSS","barcode":"S0512G-UKSSS","name":"Spark Go 白色","qty":10,"l":16.9,"w":12.6,"h":8,"wt":0.6},{"loc":"D02-08-0102","sku":"S0511G-UKSSS","barcode":"S0511G-UKSSS","name":"Spark Go","qty":660,"l":17,"w":12.5,"h":8,"wt":0.61},{"loc":"D02-08-0103","sku":"MMESEBOGI00B8","barcode":"00855316004620","name":"Spark Edge Alternate Grille","qty":28,"l":37.7,"w":32.6,"h":1,"wt":0.79},{"loc":"D02-08-0103","sku":"MMESEBOGI00B9","barcode":"00855316004637","name":"Spark EDGE Gille_On The Edge","qty":11,"l":37.7,"w":32.6,"h":1,"wt":0.79},{"loc":"D02-09-0101","sku":"SHP11E-UKSSS","barcode":"00855316004927","name":"Spark NEO Core","qty":24,"l":21.8,"w":24.6,"h":6.3,"wt":0.7},{"loc":"D02-09-0101","sku":"SHP11E-UKSSS","barcode":"00855316004927","name":"Spark NEO Core","qty":170,"l":21.8,"w":24.6,"h":6.3,"wt":0.7},{"loc":"D02-09-0102","sku":"S5011G-UKSSS","barcode":"0855316004767","name":"Spark 2","qty":26,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D02-09-0103","sku":"S6511G-UKSSS","barcode":"00855316004774","name":"Spark EDGE UK BLK","qty":15,"l":38,"w":34,"h":42,"wt":8.8},{"loc":"D02-09-0103","sku":"S6511G-UKSSS","barcode":"00855316004774","name":"Spark EDGE UK BLK","qty":1,"l":38,"w":34,"h":42,"wt":8.8},{"loc":"D02-10-0101","sku":"SWL21M-UKSSS","barcode":"855316004910","name":"Spark Link XLR BLK UK","qty":400,"l":10.9,"w":2.5,"h":2.7,"wt":0.18},{"loc":"D02-10-0102","sku":"SWL11M-UKSS","barcode":"855316004859","name":"Spark Link UK","qty":299,"l":14.1,"w":13.7,"h":3.1,"wt":0.192},{"loc":"D02-10-0102","sku":"SWL11M-UKSS","barcode":"855316004859","name":"Spark Link UK","qty":9,"l":14.1,"w":13.7,"h":3.1,"wt":0.192},{"loc":"D02-11-0101","sku":"S040CBB-UKBS","barcode":"S040CBB-UKBS","name":"Spark Pearl UK","qty":25,"l":49,"w":28,"h":27,"wt":7.1},{"loc":"D02-11-0102","sku":"S040CBB-UKBS","barcode":"S040CBB-UKBS","name":"Spark Pearl UK","qty":56,"l":49,"w":28,"h":27,"wt":7.1},{"loc":"D02-11-0103","sku":"S040CBB-UKBS","barcode":"S040CBB-UKBS","name":"Spark Pearl UK","qty":56,"l":49,"w":28,"h":27,"wt":7.1},{"loc":"D03-01-0101","sku":"SHP11E-UKSSS","barcode":"00855316004927","name":"Spark NEO Core","qty":300,"l":21.8,"w":24.6,"h":6.3,"wt":0.7},{"loc":"D03-01-0102","sku":"SF011G-UKSS","barcode":"SF011G-UKSS","name":"Spark Live UK BLK","qty":25,"l":56,"w":43,"h":34,"wt":16},{"loc":"D03-01-0102","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":3,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D03-02-0102","sku":"S1013G-UKSSS","barcode":"00855316004569","name":"Spark MINI Vai","qty":158,"l":20,"w":18,"h":18,"wt":1.85},{"loc":"D03-02-0103","sku":"SF011G-UKSS","barcode":"SF011G-UKSS","name":"Spark Live UK BLK","qty":24,"l":56,"w":43,"h":34,"wt":16},{"loc":"D03-02-0201","sku":"SE011M-UKSS","barcode":"855316004804","name":"Spark CAB 黑色","qty":9,"l":46,"w":32,"h":61,"wt":15.8},{"loc":"D03-02-0201","sku":"SE011M-UKSS","barcode":"855316004804","name":"Spark CAB 黑色","qty":6,"l":46,"w":32,"h":61,"wt":15.8},{"loc":"D03-02-0202","sku":"SE011M-UKSS","barcode":"855316004804","name":"Spark CAB 黑色","qty":16,"l":46,"w":32,"h":61,"wt":15.8},{"loc":"D03-04-0101","sku":"SE012M-UKSS","barcode":"SE012M-UKSS","name":"Spark Cab Pearl","qty":8,"l":46,"w":32,"h":61,"wt":16},{"loc":"D03-04-0103","sku":"S1013G-UKSSS","barcode":"00855316004569","name":"Spark MINI Vai","qty":243,"l":20,"w":18,"h":18,"wt":1.85},{"loc":"D03-04-0303","sku":"SE011M-UKSS","barcode":"855316004804","name":"Spark CAB 黑色","qty":16,"l":46,"w":32,"h":61,"wt":15.8},{"loc":"D03-05-0103","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D03-06-0102","sku":"SF011G-UKSS","barcode":"SF011G-UKSS","name":"Spark Live UK BLK","qty":24,"l":56,"w":43,"h":34,"wt":16},{"loc":"D03-06-0103","sku":"SE012M-UKSS","barcode":"SE012M-UKSS","name":"Spark Cab Pearl","qty":24,"l":46,"w":32,"h":61,"wt":16},{"loc":"D03-07-0101","sku":"MMES0BOBAA023","barcode":"855316004798","name":"Spark Battery 6000mAh UK","qty":900,"l":13,"w":9.3,"h":9,"wt":0.54},{"loc":"D03-07-0102","sku":"SE012M-UKSS","barcode":"SE012M-UKSS","name":"Spark Cab Pearl","qty":24,"l":46,"w":32,"h":61,"wt":16},{"loc":"D03-08-0101","sku":"S1012G-UKSSS_FBA","barcode":"S1012G-UKSSS_FBA","name":"Spark MINI - Pearl","qty":42,"l":20.5,"w":18,"h":18.5,"wt":1.7},{"loc":"D03-08-0102","sku":"S1012G-UKSSS_FBA","barcode":"S1012G-UKSSS_FBA","name":"Spark MINI - Pearl","qty":68,"l":20.5,"w":18,"h":18.5,"wt":1.7},{"loc":"D03-08-0103","sku":"S1011G-UKSSS","barcode":"S1011G-UKSSS","name":"Spark MINI - Black","qty":226,"l":20.5,"w":18,"h":18.5,"wt":1.7},{"loc":"D03-08-0103","sku":"S1011G-UKSSS","barcode":"S1011G-UKSSS","name":"Spark MINI - Black","qty":18,"l":20.5,"w":18,"h":18.5,"wt":1.7},{"loc":"D03-09-0101","sku":"S040CBB-UKBS","barcode":"S040CBB-UKBS","name":"Spark Pearl UK","qty":51,"l":49,"w":28,"h":27,"wt":7.1},{"loc":"D03-09-0102","sku":"S0511G-UKBG","barcode":"S0511G-UKBG","name":"Spark Go 音箱保護盒","qty":218,"l":19,"w":13,"h":8,"wt":0.27},{"loc":"D03-10-0101","sku":"S0512G-UKSSS","barcode":"S0512G-UKSSS","name":"Spark Go 白色","qty":88,"l":16.9,"w":12.6,"h":8,"wt":0.6},{"loc":"D03-10-0101","sku":"ABNHH2401-A001","barcode":"ABNHH2401-A001","name":"ABNHH2401-A001","qty":41,"l":20,"w":15,"h":3,"wt":0.05},{"loc":"D03-10-0103","sku":"COSSSPW190303","barcode":"COSSSPW190303","name":"power cable for Spark","qty":52,"l":24,"w":24,"h":6,"wt":0.48},{"loc":"D03-11-0101","sku":"AA100330R2-AT-CFM","barcode":"AA100330R2-AT-CFM","name":"USB-A to 9V Charging DC Cable","qty":37,"l":16,"w":7,"h":3,"wt":0.08},{"loc":"D03-11-0101","sku":"MACCBUB010102","barcode":"MACCBUB010102","name":"USB-A to USB-B Cable","qty":14,"l":15,"w":10,"h":2,"wt":0.06},{"loc":"D03-11-0101","sku":"MACKB22150101","barcode":"MACKB22150101","name":"SPARK40 CAP KNOB RoHS","qty":350,"l":2,"w":2,"h":2,"wt":0.1},{"loc":"D03-11-0101","sku":"MMES0BOGI00R2","barcode":"MMES0BOGI00R2","name":"Gill-R for Spark Mini_EU","qty":172,"l":13.4,"w":14,"h":2,"wt":0.102},{"loc":"D03-11-0101","sku":"MMES0BOSDHO002","barcode":"MMES0BOSDHO002","name":"Carrying Strap for Spark GO (Black)","qty":18,"l":18,"w":15,"h":1,"wt":0.01},{"loc":"D03-11-0101","sku":"MMES0BOSDHO003","barcode":"MMES0BOSDHO003","name":"Carrying Strap for Spark GO (White)","qty":18,"l":18,"w":15,"h":1,"wt":0.01},{"loc":"D03-11-0101","sku":"MMES0BOSDHO009","barcode":"MMES0BOSDHO009","name":"Spark 2 Handbag Strap","qty":92,"l":21,"w":5,"h":8,"wt":0.1},{"loc":"D03-11-0101","sku":"MMES140ST0101","barcode":"MMES140ST0101","name":"Carrying Strap for Spark (Black)","qty":21,"l":61,"w":4.5,"h":1,"wt":0.02},{"loc":"D03-11-0101","sku":"MMESEBOCI00B4","barcode":"MMESEBOCI00B4","name":"DC Plug Adapter for Spark 2","qty":129,"l":1.25,"w":1,"h":1,"wt":0.07},{"loc":"D03-11-0101","sku":"PAS03192007","barcode":"PAS03192007","name":"USB-C to USB-A Cable","qty":37,"l":15,"w":10,"h":2,"wt":0.06},{"loc":"D03-11-0101","sku":"PAS03192008(BK)","barcode":"PAS03192008(BK)","name":"Handle Strap (Black)","qty":30,"l":40,"w":10,"h":2,"wt":0.05},{"loc":"D03-11-0101","sku":"PAS03192008(WHITE)","barcode":"PAS03192008(White)","name":"Handle Strap (White)","qty":9,"l":40,"w":10,"h":2,"wt":0.08},{"loc":"D03-11-0101","sku":"PIN-LOCK-SPARKGO","barcode":"PIN-LOCK-SPARKGO","name":"Strap lock for Spark GO","qty":16,"l":16,"w":18,"h":1,"wt":0.01},{"loc":"D03-11-0103","sku":"SF011G-UKSS","barcode":"SF011G-UKSS","name":"Spark Live UK BLK","qty":24,"l":56,"w":43,"h":34,"wt":16},{"loc":"D04-01-0101","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D04-01-0102","sku":"S040CB9-UKBS","barcode":"S040CB9-UKBS","name":"Spark 40","qty":32,"l":49,"w":28,"h":27,"wt":7.2},{"loc":"D04-01-0102","sku":"RPD11M-UKSSS","barcode":"855316004989","name":"Reactor Control","qty":254,"l":22,"w":11,"h":8,"wt":0.77},{"loc":"D04-01-0103","sku":"S040CB9-UKBS","barcode":"S040CB9-UKBS","name":"Spark 40","qty":32,"l":49,"w":28,"h":27,"wt":7.2},{"loc":"D04-01-0103","sku":"RPD11M-UKSSS","barcode":"855316004989","name":"Reactor Control","qty":256,"l":22,"w":11,"h":8,"wt":0.77},{"loc":"D04-03-0101","sku":"RPD11M-UKSSS","barcode":"855316004989","name":"Reactor Control","qty":288,"l":22,"w":11,"h":8,"wt":0.77},{"loc":"D04-05-0101","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D04-05-0102","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D04-05-0103","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D04-08-0103","sku":"COSSSPW190303","barcode":"855316004514","name":"power cable for Spark","qty":1,"l":24,"w":24,"h":6,"wt":0.48},{"loc":"D04-08-0103","sku":"IR121C-UNSSS","barcode":"855316004651","name":"RIFF - Black","qty":4,"l":15.8,"w":10,"h":6.1,"wt":0.287},{"loc":"D04-08-0103","sku":"MMES0BOBAA023","barcode":"855316004798","name":"Spark Battery 6000mAh UK","qty":1,"l":13,"w":9.3,"h":9,"wt":0.54},{"loc":"D04-08-0103","sku":"MMES0BOSDHO009","barcode":"MMES0BOSDHO009","name":"Spark 2 Handbag Strap","qty":1,"l":21,"w":5,"h":8,"wt":0.1},{"loc":"D04-08-0103","sku":"S0511G-UKSSS","barcode":"S0511G-UKSSS","name":"Spark Go","qty":1,"l":17,"w":12.5,"h":8,"wt":0.61},{"loc":"D04-08-0103","sku":"S1013G-UKSSS","barcode":"855316004569","name":"Spark MINI Vai","qty":1,"l":20,"w":18,"h":18,"wt":1.85},{"loc":"D04-08-0103","sku":"S5011G-UKBSS","barcode":"855316004606","name":"SPARK 2 Handbag","qty":4,"l":49,"w":28,"h":13,"wt":0.68},{"loc":"D04-08-0103","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":8,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D04-08-0103","sku":"S5012G-UKSSS","barcode":"0855316004545","name":"Spark 2 Pearl","qty":3,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D04-08-0103","sku":"PAS03916001","barcode":"PAS03916001","name":"Spark 2 PSU","qty":1,"l":20,"w":5,"h":4,"wt":0.2},{"loc":"D04-08-0103","sku":"PAS03918001","barcode":"PAS03918001","name":"Spark 2 UK Power cable","qty":1,"l":20,"w":5,"h":4,"wt":0.1},{"loc":"D04-08-0103","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":1,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D04-09-0101","sku":"S5011G-UKSSS","barcode":"0855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D04-09-0102","sku":"S5011G-UKSSS","barcode":"0855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D04-09-0103","sku":"S5011G-UKSSS","barcode":"0855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D04-10-0101","sku":"S5011G-UKSSS","barcode":"0855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D04-10-0102","sku":"S5011G-UKSSS","barcode":"0855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D04-10-0103","sku":"S5011G-UKSSS","barcode":"0855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D04-11-0101","sku":"S5011G-UKSSS","barcode":"0855316004767","name":"Spark 2","qty":28,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D04-11-0101","sku":"S5011G-UKSSS","barcode":"0855316004767","name":"Spark 2","qty":32,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D05-01-0102","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D05-08-0101","sku":"S5011G-UKSSS","barcode":"0855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D05-08-0102","sku":"S5011G-UKSSS","barcode":"0855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D05-08-0103","sku":"S5011G-UKSSS","barcode":"0855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D05-09-0101","sku":"S5011G-UKSSS","barcode":"0855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D05-09-0102","sku":"S5011G-UKSSS","barcode":"0855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D05-09-0103","sku":"S5011G-UKSSS","barcode":"0855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D05-10-0101","sku":"S5011G-UKSSS","barcode":"0855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D05-10-0102","sku":"S5011G-UKSSS","barcode":"0855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D05-10-0103","sku":"S5011G-UKSSS","barcode":"0855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D05-11-0101","sku":"S5011G-UKSSS","barcode":"0855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D05-11-0102","sku":"S5011G-UKSSS","barcode":"0855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D05-11-0103","sku":"S5011G-UKSSS","barcode":"0855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D06-03-0103","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6}];
+
+/* ---------- state ---------- */
+let itemStates = {};      // key -> {remark, confirmedAt, notAPallet, sizeDiscrepancy, hasPhoto}
+let pendingPhotos = {};   // key -> [{dataUrl, base64}, ...]  — in-memory only for this session
+let capturedPhotos = {};  // key -> [{dataUrl, base64, sku, loc, ts}, ...] — accumulates for one batch share
+let skuSpecStatus = {};   // sku -> 'correct' | 'incorrect' — applies to ALL locations of that SKU
+let expandedKey = null;
+let searchQuery = '';
+let driveFolderId = null;      // in-memory only — re-discovered each time the app opens
+let driveProgressFileId = null;
+let syncInFlight = false;
+
+const DRIVE_FOLDER_NAME = 'Warehouse Inventory Check Photos';
+const DRIVE_PROGRESS_FILENAME = 'inventory_check_progress.json';
+
+function itemKey(it) { return it.loc + '|' + it.sku + '|' + it.barcode; }
+function photoFilename(it, index) {
+  const base = it ? it.sku + '-' + it.loc : 'photo';
+  return (index > 0 ? base + '-' + (index + 1) : base) + '.jpg';
+}
+
+/* ---------- persistence ----------
+   Two layers, used together:
+   1. Browser localStorage — this is a normal hosted page (not a Claude
+      artifact), so localStorage always works here. It's the fast, instant
+      "did my confirm actually save" guarantee.
+   2. Google Drive JSON backup — real Drive REST API calls with your own
+      OAuth token, so it's a genuine cross-device backup once you sign in.
+   Manual export (📤 button) always works regardless of either. */
+let localStorageWorks = null; // null = untested, true/false once we know
+
+function lsGet(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
+function lsSet(key, val) { try { localStorage.setItem(key, val); return true; } catch (e) { return false; } }
+
+async function loadItemStates() {
+  try {
+    const v = lsGet('progressData');
+    if (v) {
+      applyProgressPayload(JSON.parse(v));
+      localStorageWorks = true;
+      updateLocalStorageIndicator();
+      return true;
+    }
+    localStorageWorks = true;
+    updateLocalStorageIndicator();
+    return false;
+  } catch (e) {
+    localStorageWorks = false;
+    updateLocalStorageIndicator();
+    return false;
+  }
+}
+async function saveItemStates() {
+  localStorageWorks = lsSet('progressData', JSON.stringify(progressPayload()));
+  updateLocalStorageIndicator();
+}
+async function loadDriveFolderId() { driveFolderId = lsGet('driveFolderId'); }
+async function saveDriveFolderId(id) { driveFolderId = id; lsSet('driveFolderId', id); }
+async function loadDriveProgressFileId() { driveProgressFileId = lsGet('driveProgressFileId'); }
+async function saveDriveProgressFileId(id) { driveProgressFileId = id; lsSet('driveProgressFileId', id); }
+async function loadPendingPhotoQueue() { /* not persisted — lost if the tab closes mid-upload */ }
+async function savePendingPhotoQueue() { /* no-op, see above */ }
+
+/* ---------- Google sign-in (Google Identity Services) ---------- */
+let googleClientId = null;
+let tokenClient = null;
+let accessToken = null;
+let tokenExpiresAt = 0;
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+
+function loadGoogleClientId() { googleClientId = lsGet('googleClientId'); return googleClientId; }
+function saveGoogleClientId(id) { googleClientId = id; lsSet('googleClientId', id); }
+
+function initGis() {
+  if (!googleClientId || typeof google === 'undefined' || !google.accounts) return false;
+  if (tokenClient) return true;
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: googleClientId,
+    scope: DRIVE_SCOPE,
+    callback: ''
+  });
+  return true;
+}
+
+function requestAccessToken(interactive) {
+  return new Promise((resolve, reject) => {
+    if (!initGis()) { reject(new Error('Google 登入元件未載入，請檢查 Client ID 或網絡')); return; }
+    tokenClient.callback = (resp) => {
+      if (resp.error) { reject(new Error('Google 登入失敗：' + resp.error)); return; }
+      accessToken = resp.access_token;
+      tokenExpiresAt = Date.now() + (resp.expires_in * 1000) - 60000;
+      resolve(accessToken);
+    };
+    tokenClient.requestAccessToken({ prompt: interactive ? 'consent' : '' });
+  });
+}
+
+async function ensureAccessToken(forceInteractive) {
+  // Only ever called from an explicit user tap — a popup requested from a
+  // background call gets silently blocked by the browser.
+  if (!forceInteractive && accessToken && Date.now() < tokenExpiresAt) return accessToken;
+  return requestAccessToken(true);
+}
+
+function isSignedIn() { return !!accessToken && Date.now() < tokenExpiresAt; }
+
+async function driveApiFetch(url, options) {
+  options = options || {};
+  if (!accessToken || Date.now() >= tokenExpiresAt) {
+    updateGoogleAuthUI();
+    throw new Error('未登入 Google 或登入已過期，請撳「登入 Google」');
+  }
+  options.headers = Object.assign({}, options.headers, { Authorization: 'Bearer ' + accessToken });
+  const res = await fetch(url, options);
+  if (res.status === 401) {
+    accessToken = null;
+    updateGoogleAuthUI();
+    throw new Error('Google 登入已失效，請重新撳「登入 Google」');
+  }
+  return res;
+}
+
+/* ---------- Google Drive REST API v3 ---------- */
+/* ---------- Google Drive REST API v3 ---------- */
+async function driveFindFolder(name) {
+  const q = encodeURIComponent(
+    "name='" + name.replace(/'/g, "\\'") + "' and mimeType='application/vnd.google-apps.folder' and trashed=false"
+  );
+  const res = await driveApiFetch('https://www.googleapis.com/drive/v3/files?q=' + q + '&fields=files(id,name)&spaces=drive');
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error && data.error.message || 'Drive API error');
+  return (data.files && data.files.length) ? data.files[0].id : null;
+}
+
+async function driveCreateFolder(name) {
+  const res = await driveApiFetch('https://www.googleapis.com/drive/v3/files', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: name, mimeType: 'application/vnd.google-apps.folder' })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error && data.error.message || '建立資料夾失敗');
+  return data.id;
+}
+
+async function getOrCreateDriveFolder() {
+  if (driveFolderId) return driveFolderId;
+  await loadDriveFolderId();
+  if (driveFolderId) return driveFolderId;
+  let id = await driveFindFolder(DRIVE_FOLDER_NAME);
+  if (!id) id = await driveCreateFolder(DRIVE_FOLDER_NAME);
+  await saveDriveFolderId(id);
+  return id;
+}
+
+async function uploadPhotoToDrive(base64, filename, folderId) {
+  const boundary = 'warehouseinvbound' + Date.now();
+  const metadata = JSON.stringify({ name: filename, parents: [folderId], mimeType: 'image/jpeg' });
+  const body =
+    '--' + boundary + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + metadata + '\r\n' +
+    '--' + boundary + '\r\nContent-Type: image/jpeg\r\nContent-Transfer-Encoding: base64\r\n\r\n' + base64 + '\r\n' +
+    '--' + boundary + '--';
+  const res = await driveApiFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+    method: 'POST',
+    headers: { 'Content-Type': 'multipart/related; boundary=' + boundary },
+    body: body
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error && data.error.message || '相片上傳失敗');
+  return data.id;
+}
+
+/* Fire-and-forget background upload, kicked off the moment a photo is taken
+   so it has the most time to finish while the person keeps checking other
+   items. Status lives on the photo object itself so each thumbnail can show
+   its own progress. */
+async function autoUploadPhoto(key, idx) {
+  const photo = pendingPhotos[key] && pendingPhotos[key][idx];
+  if (!photo) return;
+  if (!isSignedIn()) { photo.uploadStatus = 'failed'; if (expandedKey === key) render(); renderPhotoBatchButton(); return; }
+  const it = INVENTORY.find(x => itemKey(x) === key);
+  photo.uploadStatus = 'uploading';
+  if (expandedKey === key) render();
+  renderPhotoBatchButton();
+  try {
+    const folderId = await getOrCreateDriveFolder();
+    const filename = photoFilename(it, idx);
+    await uploadPhotoToDrive(photo.base64, filename, folderId);
+    photo.uploadStatus = 'uploaded';
+    toast(filename + ' 已上傳 Drive');
+  } catch (err) {
+    photo.uploadStatus = 'failed';
+    console.error('auto photo upload failed', err);
+  }
+  if (expandedKey === key) render();
+  renderPhotoBatchButton();
+}
+
+async function retryAllFailedPhotoUploads() {
+  let count = 0;
+  Object.keys(pendingPhotos).forEach(key => {
+    pendingPhotos[key].forEach((photo, idx) => {
+      if (photo.uploadStatus === 'failed') { autoUploadPhoto(key, idx); count++; }
+    });
+  });
+  if (count === 0) toast('冇失敗嘅相片需要重試');
+  else toast('重試緊 ' + count + ' 張相片…');
+}
+
+async function driveFindFileInFolder(name, folderId) {
+  const q = encodeURIComponent(
+    "name='" + name.replace(/'/g, "\\'") + "' and '" + folderId + "' in parents and trashed=false"
+  );
+  const res = await driveApiFetch('https://www.googleapis.com/drive/v3/files?q=' + q + '&fields=files(id,name)&spaces=drive');
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error && data.error.message || 'Drive API error');
+  return (data.files && data.files.length) ? data.files[0].id : null;
+}
+
+async function getOrCreateProgressFileId(folderId) {
+  if (driveProgressFileId) return driveProgressFileId;
+  await loadDriveProgressFileId();
+  if (driveProgressFileId) return driveProgressFileId;
+  let id = await driveFindFileInFolder(DRIVE_PROGRESS_FILENAME, folderId);
+  if (!id) {
+    const res = await driveApiFetch('https://www.googleapis.com/drive/v3/files', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: DRIVE_PROGRESS_FILENAME, parents: [folderId], mimeType: 'application/json' })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error && data.error.message || '無法建立進度備份檔案');
+    id = data.id;
+  }
+  await saveDriveProgressFileId(id);
+  return id;
+}
+
+async function readProgressFileFromDrive(fileId) {
+  // Real Drive API — ?alt=media returns the exact raw file bytes, no
+  // paraphrasing/decoding tricks needed (unlike the Claude-MCP version).
+  const res = await driveApiFetch('https://www.googleapis.com/drive/v3/files/' + fileId + '?alt=media');
+  if (!res.ok) throw new Error('讀取進度備份失敗 (HTTP ' + res.status + ')');
+  const text = await res.text();
+  if (!text || !text.trim()) return {};
+  try { return JSON.parse(text); } catch (e) { return {}; }
+}
+
+function progressPayload() {
+  return { itemStates: itemStates, skuSpecStatus: skuSpecStatus };
+}
+
+function applyProgressPayload(obj) {
+  if (!obj || typeof obj !== 'object') return;
+  if (obj.itemStates || obj.skuSpecStatus) {
+    itemStates = obj.itemStates && typeof obj.itemStates === 'object' ? obj.itemStates : {};
+    skuSpecStatus = obj.skuSpecStatus && typeof obj.skuSpecStatus === 'object' ? obj.skuSpecStatus : {};
+  } else {
+    // backward-compat: older exports/Drive files stored a flat itemStates object
+    itemStates = obj;
+  }
+}
+
+async function loadItemStatesFromDrive() {
+  if (!isSignedIn()) { updateSyncIndicator('signedout'); return; }
+  updateSyncIndicator('syncing');
+  try {
+    const folderId = await getOrCreateDriveFolder();
+    const fileId = await getOrCreateProgressFileId(folderId);
+    const loaded = await readProgressFileFromDrive(fileId);
+    applyProgressPayload(loaded);
+    updateSyncIndicator('ok');
+  } catch (e) {
+    console.error('load from drive failed', e);
+    updateSyncIndicator('fail');
+    toast('未能從 Google Drive 讀取之前嘅進度，請撳「測試連接」檢查');
+  }
+}
+
+async function testDriveConnection() {
+  const panel = document.getElementById('debug-panel');
+  const btn = document.getElementById('test-drive-btn');
+  panel.style.display = 'block';
+  panel.textContent = '測試緊…';
+  btn.disabled = true;
+  try {
+    await ensureAccessToken(!accessToken);
+    driveFolderId = null;
+    const folderId = await getOrCreateDriveFolder();
+    panel.textContent = '✅ 成功。資料夾 ID：' + folderId +
+      '\n\n打開你自己個 Google Drive → 我的雲端硬碟根目錄，搵 "' + DRIVE_FOLDER_NAME + '"。';
+    updateGoogleAuthUI();
+    toast('Google Drive 連接正常');
+  } catch (err) {
+    panel.textContent = '❌ ' + err.message;
+    toast('連接測試失敗');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function updateLocalStorageIndicator() {
+  const el = document.getElementById('local-status');
+  if (!el) return;
+  el.classList.remove('ok', 'fail');
+  if (localStorageWorks === true) {
+    el.classList.add('ok');
+    el.textContent = '本機儲存：可用 ✓（每次操作自動即時保存）';
+  } else if (localStorageWorks === false) {
+    el.classList.add('fail');
+    el.textContent = '本機儲存：未能使用（私隱瀏覽模式？）';
+  } else {
+    el.textContent = '本機儲存：檢查緊…';
+  }
+}
+
+function updateSyncIndicator(state, when) {
+  const el = document.getElementById('sync-status');
+  if (!el) return;
+  el.classList.remove('ok', 'fail');
+  if (state === 'syncing') {
+    el.textContent = 'Google Drive：同步中…';
+  } else if (state === 'ok') {
+    el.classList.add('ok');
+    el.textContent = 'Google Drive：已同步 ' + (when || new Date()).toLocaleTimeString('zh-HK');
+  } else if (state === 'fail') {
+    el.classList.add('fail');
+    el.textContent = 'Google Drive：同步失敗（本機記錄已保留，稍後重試）';
+  } else if (state === 'signedout') {
+    el.textContent = 'Google Drive：未登入';
+  }
+}
+
+async function syncProgressToDrive() {
+  if (!isSignedIn()) { updateSyncIndicator('signedout'); return; }
+  if (syncInFlight) return;
+  syncInFlight = true;
+  updateSyncIndicator('syncing');
+  try {
+    const folderId = await getOrCreateDriveFolder();
+    const fileId = await getOrCreateProgressFileId(folderId);
+    const res = await driveApiFetch('https://www.googleapis.com/upload/drive/v3/files/' + fileId + '?uploadType=media', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(progressPayload())
+    });
+    if (!res.ok) { const data = await res.json(); throw new Error(data.error && data.error.message || '同步失敗'); }
+    updateSyncIndicator('ok');
+  } catch (e) {
+    console.error('drive sync failed', e);
+    updateSyncIndicator('fail');
+  } finally {
+    syncInFlight = false;
+  }
+}
+
+/* ---------- photo capture & resize ---------- */
+function readAndResizeImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('讀取相片失敗'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('相片格式錯誤'));
+      img.onload = () => {
+        const maxW = 640;
+        const scale = Math.min(1, maxW / img.width);
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.45);
+        resolve(dataUrl);
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+/* ---------- manual export / share (reliable, network-independent) ---------- */
+function dataUrlToBlob(dataUrl) {
+  // No fetch() here on purpose — the artifact sandbox intercepts ALL fetch()
+  // calls (even for local data: URIs) and relays them through a bridge that
+  // only handles real network requests, failing with a generic "Load failed".
+  // Decoding the base64 by hand avoids fetch entirely.
+  const commaIdx = dataUrl.indexOf(',');
+  const header = dataUrl.slice(0, commaIdx);
+  const base64 = dataUrl.slice(commaIdx + 1);
+  const mimeMatch = header.match(/data:(.*?);base64/);
+  const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+  const binary = atob(base64);
+  const len = binary.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes], { type: mime });
+}
+
+async function shareOrDownloadBlob(filename, blob) {
+  try {
+    const file = new File([blob], filename, { type: blob.type });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: filename });
+      return 'shared';
+    }
+  } catch (err) {
+    if (err && err.name === 'AbortError') return 'cancelled';
+    // fall through to download
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 8000);
+  return 'downloaded';
+}
+
+async function exportProgress() {
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    itemCount: Object.keys(itemStates).length,
+    itemStates: itemStates,
+    skuSpecStatus: skuSpecStatus
+  };
+  const filename = 'inventory_progress_' + new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-') + '.json';
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  try {
+    const result = await shareOrDownloadBlob(filename, blob);
+    if (result === 'shared') toast('已開啟分享 — 揀 Drive / Files / 電郵等儲存');
+    else if (result === 'downloaded') toast('已下載 ' + filename + '，可以自己傳去 Drive');
+  } catch (err) {
+    toast('匯出失敗，但你嘅記錄其實已經自動同步緊 Google Drive（見上面「雲端備份」狀態），唔使太擔心');
+  }
+}
+
+async function importProgressFromFile(file) {
+  try {
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+    const incomingItems = parsed && parsed.itemStates ? parsed.itemStates : parsed;
+    const incomingSku = parsed && parsed.skuSpecStatus ? parsed.skuSpecStatus : {};
+    if (!incomingItems || typeof incomingItems !== 'object') throw new Error('檔案格式不正確');
+    itemStates = Object.assign({}, itemStates, incomingItems);
+    skuSpecStatus = Object.assign({}, skuSpecStatus, incomingSku);
+    render();
+    toast('已匯入 ' + Object.keys(incomingItems).length + ' 項記錄');
+  } catch (err) {
+    toast('匯入失敗：' + err.message);
+  }
+}
+
+async function sharePendingPhoto(key) {
+  const pending = pendingPhotos[key];
+  if (!pending || pending.length === 0) { toast('冇待分享嘅相片，請先拍照'); return; }
+  const it = INVENTORY.find(x => itemKey(x) === key);
+  try {
+    const files = [];
+    for (let i = 0; i < pending.length; i++) {
+      const blob = await dataUrlToBlob(pending[i].dataUrl);
+      files.push(new File([blob], photoFilename(it, i), { type: 'image/jpeg' }));
+    }
+    let result;
+    if (navigator.canShare && navigator.canShare({ files })) {
+      await navigator.share({ files, title: it ? it.sku + '-' + it.loc : '相片' });
+      result = 'shared';
+    } else {
+      for (const f of files) {
+        const url = URL.createObjectURL(f);
+        const a = document.createElement('a');
+        a.href = url; a.download = f.name;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        await new Promise(r => setTimeout(r, 400));
+        URL.revokeObjectURL(url);
+      }
+      result = 'downloaded';
+    }
+    delete pendingPhotos[key];
+    delete capturedPhotos[key];
+    render();
+    if (result === 'shared') toast('已開啟分享 — 揀 Drive 或其他方式儲存');
+    else toast('已下載 ' + files.length + ' 張相，可以自己傳去 Drive');
+  } catch (err) {
+    if (err && err.name === 'AbortError') return; // user cancelled the share sheet
+    toast('分享失敗：' + err.message);
+  }
+}
+
+function capturedPhotoCount() {
+  return Object.values(capturedPhotos).reduce((sum, arr) => sum + arr.length, 0);
+}
+
+function renderPhotoBatchButton() {
+  const el = document.getElementById('photo-batch-row');
+  if (!el) return;
+  const n = capturedPhotoCount();
+  if (n === 0) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.style.display = 'flex';
+  el.innerHTML = '<span>📷 已拍 ' + n + ' 張相未存 — 每張長按「儲存圖片」最穩陣</span>' +
+    '<button id="share-all-photos-btn" type="button">試下分享</button>';
+  document.getElementById('share-all-photos-btn').addEventListener('click', shareAllPhotos);
+}
+
+async function shareAllPhotos() {
+  const keys = Object.keys(capturedPhotos);
+  if (keys.length === 0) { toast('冇相片可以分享'); return; }
+  try {
+    const files = [];
+    for (const k of keys) {
+      const photos = capturedPhotos[k];
+      for (let i = 0; i < photos.length; i++) {
+        const p = photos[i];
+        const blob = await dataUrlToBlob(p.dataUrl);
+        files.push(new File([blob], photoFilename({ sku: p.sku, loc: p.loc }, i), { type: 'image/jpeg' }));
+      }
+    }
+    if (navigator.canShare && navigator.canShare({ files })) {
+      await navigator.share({ files, title: '倉庫核對相片 (' + files.length + '張)' });
+      toast('已開啟分享 — 揀 Drive 儲存全部相片');
+      capturedPhotos = {};
+      pendingPhotos = {};
+      render();
+      return;
+    }
+    // Fallback: browsers without multi-file share — download one by one.
+    for (const f of files) {
+      const url = URL.createObjectURL(f);
+      const a = document.createElement('a');
+      a.href = url; a.download = f.name;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      await new Promise(r => setTimeout(r, 400));
+      URL.revokeObjectURL(url);
+    }
+    toast('已下載 ' + files.length + ' 張相片，可以自己傳去 Drive');
+    capturedPhotos = {};
+    pendingPhotos = {};
+    render();
+  } catch (err) {
+    if (err && err.name === 'AbortError') return; // user cancelled the share sheet
+    toast('分享失敗：' + err.message);
+  }
+}
+
+/* ---------- rendering ---------- */
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+function filteredItems() {
+  const q = searchQuery.trim().toLowerCase();
+  let items = INVENTORY;
+  if (q) {
+    items = INVENTORY.filter(it =>
+      (it.loc || '').toLowerCase().includes(q) ||
+      (it.name || '').toLowerCase().includes(q) ||
+      (it.sku || '').toLowerCase().includes(q) ||
+      (it.barcode || '').toLowerCase().includes(q)
+    );
+  }
+  return items; // already sorted by location on load
+}
+
+function renderProgress() {
+  const total = INVENTORY.length;
+  const done = Object.values(itemStates).filter(s => s.confirmedAt).length;
+  document.getElementById('progress').innerHTML =
+    '已核對 <b>' + done + '</b> / ' + total;
+}
+
+function render() {
+  renderProgress();
+  renderPhotoBatchButton();
+  const listEl = document.getElementById('list');
+  const items = filteredItems();
+  document.getElementById('search-clear').style.display = searchQuery ? 'block' : 'none';
+
+  if (items.length === 0) {
+    listEl.innerHTML = '<div class="empty">找不到符合的庫位 / SKU / 條碼</div>';
+    return;
+  }
+
+  let html = '';
+  let lastLoc = null;
+  items.forEach((it, idx) => {
+    if (it.loc !== lastLoc) {
+      html += '<div class="loc-group"><div class="loc-head">庫位 ' + escapeHtml(it.loc) + '</div>';
+      lastLoc = it.loc;
+    }
+    const key = itemKey(it);
+    const st = itemStates[key] || {};
+    const isOpen = expandedKey === key;
+    const confirmed = !!st.confirmedAt;
+    html += renderItem(it, key, st, isOpen, confirmed);
+  });
+  // close last group div — simplest: wrap groups properly by rebuilding with closing tags
+  listEl.innerHTML = buildGroupedHtml(items);
+
+  attachHandlers();
+}
+
+function buildGroupedHtml(items) {
+  let html = '';
+  let lastLoc = null;
+  let openGroup = false;
+  items.forEach(it => {
+    if (it.loc !== lastLoc) {
+      if (openGroup) html += '</div>';
+      html += '<div class="loc-group"><div class="loc-head">庫位 ' + escapeHtml(it.loc) + '</div>';
+      lastLoc = it.loc;
+      openGroup = true;
+    }
+    const key = itemKey(it);
+    const st = itemStates[key] || {};
+    const isOpen = expandedKey === key;
+    const confirmed = !!st.confirmedAt;
+    html += renderItem(it, key, st, isOpen, confirmed);
+  });
+  if (openGroup) html += '</div>';
+  return html;
+}
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+function renderItem(it, key, st, isOpen, confirmed) {
+  const pending = pendingPhotos[key];
+  const notPallet = confirmed && !!st.notAPallet;
+  const hasDiscrepancy = !!st.sizeDiscrepancy;
+  let cls = 'item';
+  if (confirmed) cls += ' confirmed';
+  if (notPallet) cls += ' not-pallet';
+  if (hasDiscrepancy) cls += ' discrepancy';
+
+  let out = '<div class="' + cls + '" data-key="' + escapeHtml(key) + '">';
+  out += '<div class="item-summary" data-toggle="' + escapeHtml(key) + '">';
+  out += '<div class="item-main">';
+  out += '<div class="item-name">' + escapeHtml(it.name || '(無名稱)') + '</div>';
+  out += '<div class="item-sub">' + escapeHtml(it.sku) + ' · ' + escapeHtml(it.barcode);
+  if (hasDiscrepancy) out += '<span class="flag-chip">尺寸差異</span>';
+  out += '</div>';
+  out += '</div>';
+  if (confirmed) {
+    out += '<div class="badge-ok' + (notPallet ? ' not-pallet' : '') + '">' + (notPallet ? '•' : '✓') + '</div>';
+  } else {
+    out += '<div class="item-qty"><span class="n">' + escapeHtml(it.qty) + '</span><span class="u">件</span></div>';
+  }
+  out += '</div>';
+
+  if (isOpen) {
+    out += '<div class="item-detail">';
+    const skuStatus = skuSpecStatus[it.sku];
+    out += '<div class="spec-grid">';
+    out += specBox(it.l, '長 cm', skuStatus);
+    out += specBox(it.w, '闊 cm', skuStatus);
+    out += specBox(it.h, '高 cm', skuStatus);
+    out += specBox(it.wt, '重量 kg', skuStatus);
+    out += '</div>';
+
+    out += '<div class="spec-verify-row">';
+    out += '<button class="spec-verify-btn correct' + (skuStatus === 'correct' ? ' active' : '') + '" id="spec-correct-btn" type="button">✓ 尺寸/重量正確</button>';
+    out += '<button class="spec-verify-btn incorrect' + (skuStatus === 'incorrect' ? ' active' : '') + '" id="spec-incorrect-btn" type="button">✕ 尺寸/重量錯誤</button>';
+    out += '</div>';
+    out += '<div class="spec-verify-note">呢個SKU（' + escapeHtml(it.sku) + '）喺所有庫位都會一齊標記，因為規格係SKU層面，唔係逐個庫位。</div>';
+
+    out += '<label class="field-label">數量：' + escapeHtml(it.qty) + ' 件　|　庫位：' + escapeHtml(it.loc) + '</label>';
+
+    out += '<label class="field-label" for="remark-input">備註 Remarks</label>';
+    out += '<textarea id="remark-input" placeholder="輸入備註...">' + escapeHtml(st.remark || '') + '</textarea>';
+
+    out += '<div class="photo-row">';
+    out += '<input type="file" accept="image/*" capture="environment" id="photo-input" style="display:none">';
+    if (pending && pending.length > 0) {
+      const anyFailed = pending.some(p => p.uploadStatus === 'failed');
+      const allUploaded = pending.every(p => p.uploadStatus === 'uploaded');
+      pending.forEach((p, i) => {
+        const status = p.uploadStatus || 'pending';
+        out += '<div class="photo-thumb-wrap">';
+        out += '<img class="photo-thumb' + (status === 'uploading' ? ' uploading' : '') + '" src="' + p.dataUrl + '">';
+        if (status === 'uploading') out += '<span class="status-badge uploading">⏳</span>';
+        else if (status === 'uploaded') out += '<span class="status-badge uploaded">✓</span>';
+        else if (status === 'failed') out += '<span class="status-badge failed" data-retry-photo-idx="' + i + '">↻</span>';
+        out += '<button class="remove-photo-btn" data-remove-photo-idx="' + i + '" type="button">✕</button>';
+        out += '</div>';
+      });
+      out += '<button class="photo-btn" id="photo-btn" type="button">📷 再影多張</button>';
+      out += '</div>';
+      if (allUploaded) {
+        out += '<div class="spec-verify-note">✓ 已全部自動上傳去 Google Drive。</div>';
+      } else if (anyFailed) {
+        out += '<div class="spec-verify-note">部分相片上傳失敗（撳張相底部嘅 ↻ 可以重試）。<b>穩陣做法：長按張相 → 「儲存圖片」</b>做多重備份。</div>';
+      } else {
+        out += '<div class="spec-verify-note">相片自動上傳緊 Google Drive… 如果唔放心，都可以長按張相 → 「儲存圖片」做多重備份。</div>';
+      }
+    } else if (st.hasPhoto) {
+      out += '<span class="photo-status">✓ 已影過相</span>';
+      out += '<button class="photo-btn" id="photo-btn" type="button">📷 拍照</button>';
+      out += '</div>';
+    } else {
+      out += '<button class="photo-btn" id="photo-btn" type="button">📷 拍照</button>';
+      out += '</div>';
+    }
+
+    out += '<div class="flag-row">';
+    out += '<button class="flag-btn' + (hasDiscrepancy ? ' active' : '') + '" id="discrepancy-btn" type="button">';
+    out += (hasDiscrepancy ? '⚠ 已標記尺寸有差異' : '⚠ 標記尺寸有差異');
+    out += '</button>';
+    out += '</div>';
+
+    if (confirmed) {
+      out += '<button class="confirm-btn is-confirmed' + (notPallet ? ' secondary' : '') + '" id="confirm-btn" type="button">✓ ' +
+        (notPallet ? '已確認（不佔托盤）' : '已確認此托盤') + '</button>';
+      out += '<button class="undo-btn" id="undo-btn" type="button">取消確認呢個托盤</button>';
+      out += '<div class="meta-line">確認時間：' + new Date(st.confirmedAt).toLocaleString('zh-HK') + '</div>';
+    } else {
+      out += '<button class="confirm-btn" id="confirm-btn" type="button">確認一托盤</button>';
+      out += '<button class="confirm-btn secondary" id="confirm-not-pallet-btn" type="button">已確認，但不佔一個托盤</button>';
+    }
+    out += '</div>';
+  }
+  out += '</div>';
+  return out;
+}
+
+function specBox(val, label, skuStatus) {
+  let cls = 'spec';
+  if (skuStatus === 'correct') cls += ' spec-correct';
+  else if (skuStatus === 'incorrect') cls += ' spec-incorrect';
+  return '<div class="' + cls + '"><div class="v">' + escapeHtml(val) + '</div><div class="k">' + label + '</div></div>';
+}
+
+/* ---------- event handlers ---------- */
+function attachHandlers() {
+  document.querySelectorAll('[data-toggle]').forEach(el => {
+    el.addEventListener('click', () => {
+      const key = el.getAttribute('data-toggle');
+      expandedKey = (expandedKey === key) ? null : key;
+      render();
+    });
+  });
+
+  const photoBtn = document.getElementById('photo-btn');
+  const photoInput = document.getElementById('photo-input');
+  if (photoBtn && photoInput) {
+    photoBtn.addEventListener('click', () => photoInput.click());
+    photoInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        const dataUrl = await readAndResizeImage(file);
+        const base64 = dataUrl.split(',')[1];
+        const it = INVENTORY.find(x => itemKey(x) === expandedKey);
+        pendingPhotos[expandedKey] = pendingPhotos[expandedKey] || [];
+        const newIdx = pendingPhotos[expandedKey].length;
+        pendingPhotos[expandedKey].push({ dataUrl, base64, uploadStatus: 'pending' });
+        capturedPhotos[expandedKey] = capturedPhotos[expandedKey] || [];
+        capturedPhotos[expandedKey].push({ dataUrl, base64, sku: it ? it.sku : '', loc: it ? it.loc : '', ts: Date.now() });
+        await savePendingPhotoQueue();
+        render();
+        // keep item expanded after re-render
+        expandedKeyReopen();
+        autoUploadPhoto(expandedKey, newIdx); // fire-and-forget, starts immediately
+      } catch (err) {
+        toast('相片處理失敗：' + err.message);
+      }
+    });
+  }
+
+  const confirmBtn = document.getElementById('confirm-btn');
+  if (confirmBtn) {
+    confirmBtn.addEventListener('click', () => handleConfirm(expandedKey, false));
+  }
+  const confirmNotPalletBtn = document.getElementById('confirm-not-pallet-btn');
+  if (confirmNotPalletBtn) {
+    confirmNotPalletBtn.addEventListener('click', () => handleConfirm(expandedKey, true));
+  }
+  const undoBtn = document.getElementById('undo-btn');
+  if (undoBtn) {
+    undoBtn.addEventListener('click', () => handleUndo(expandedKey));
+  }
+  const discrepancyBtn = document.getElementById('discrepancy-btn');
+  if (discrepancyBtn) {
+    discrepancyBtn.addEventListener('click', () => handleToggleDiscrepancy(expandedKey));
+  }
+  const specCorrectBtn = document.getElementById('spec-correct-btn');
+  if (specCorrectBtn) {
+    specCorrectBtn.addEventListener('click', () => handleSetSkuSpecStatus(expandedKey, 'correct'));
+  }
+  const specIncorrectBtn = document.getElementById('spec-incorrect-btn');
+  if (specIncorrectBtn) {
+    specIncorrectBtn.addEventListener('click', () => handleSetSkuSpecStatus(expandedKey, 'incorrect'));
+  }
+  const sharePhotoBtn = document.getElementById('share-photo-btn');
+  if (sharePhotoBtn) {
+    sharePhotoBtn.addEventListener('click', () => sharePendingPhoto(expandedKey));
+  }
+  document.querySelectorAll('[data-remove-photo-idx]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.getAttribute('data-remove-photo-idx'), 10);
+      handleRemovePendingPhoto(expandedKey, idx);
+    });
+  });
+
+  const remarkInput = document.getElementById('remark-input');
+  if (remarkInput) {
+    remarkInput.addEventListener('input', () => {
+      // stash live remark text without full re-render (avoid losing focus)
+      itemStates[expandedKey] = itemStates[expandedKey] || {};
+      itemStates[expandedKey]._draftRemark = remarkInput.value;
+    });
+  }
+}
+
+function expandedKeyReopen() {
+  // no-op placeholder: render() already respects expandedKey
+}
+
+function handleRemovePendingPhoto(key, idx) {
+  if (!pendingPhotos[key]) return;
+  pendingPhotos[key].splice(idx, 1);
+  if (capturedPhotos[key]) capturedPhotos[key].splice(idx, 1);
+  if (pendingPhotos[key].length === 0) delete pendingPhotos[key];
+  if (capturedPhotos[key] && capturedPhotos[key].length === 0) delete capturedPhotos[key];
+  render();
+}
+
+/* Confirm is instant — local save + Drive JSON progress sync happen right away.
+   Photos are NOT auto-uploaded to Drive here — the base64 payload is too big
+   for the artifact sandbox's fetch relay and consistently fails. Photos stay
+   in capturedPhotos for the manual "全部分享" batch-share button instead,
+   which uses the native share sheet and always works. */
+async function handleConfirm(key, notAPallet) {
+  if (!key) return;
+  const remarkInput = document.getElementById('remark-input');
+  const prevSt = itemStates[key] || {};
+  const remark = remarkInput ? remarkInput.value : (prevSt._draftRemark || '');
+  const it = INVENTORY.find(x => itemKey(x) === key);
+  const pending = pendingPhotos[key];
+
+  itemStates[key] = {
+    remark: remark,
+    confirmedAt: new Date().toISOString(),
+    notAPallet: !!notAPallet,
+    sizeDiscrepancy: !!prevSt.sizeDiscrepancy,
+    hasPhoto: (!!pending && pending.length > 0) || !!prevSt.hasPhoto
+  };
+  await saveItemStates();
+  toast('已確認 ' + it.loc);
+  render();
+  syncProgressToDrive();
+}
+
+
+async function handleToggleDiscrepancy(key) {
+  if (!key) return;
+  itemStates[key] = itemStates[key] || {};
+  itemStates[key].sizeDiscrepancy = !itemStates[key].sizeDiscrepancy;
+  await saveItemStates();
+  render();
+  syncProgressToDrive();
+}
+
+async function handleSetSkuSpecStatus(key, status) {
+  if (!key) return;
+  const it = INVENTORY.find(x => itemKey(x) === key);
+  if (!it) return;
+  // Tapping the already-active state clears it back to unverified.
+  skuSpecStatus[it.sku] = (skuSpecStatus[it.sku] === status) ? undefined : status;
+  if (skuSpecStatus[it.sku] === undefined) delete skuSpecStatus[it.sku];
+  await saveItemStates();
+  render();
+  syncProgressToDrive();
+  const count = INVENTORY.filter(x => x.sku === it.sku).length;
+  if (count > 1) toast('已套用到全部 ' + count + ' 個「' + it.sku + '」庫位');
+}
+
+async function handleUndo(key) {
+  if (!key || !itemStates[key]) return;
+  itemStates[key].confirmedAt = null;
+  itemStates[key].notAPallet = false;
+  await saveItemStates();
+  render();
+  syncProgressToDrive();
+}
+
+/* ---------- search ---------- */
+document.getElementById('search').addEventListener('input', (e) => {
+  searchQuery = e.target.value;
+  render();
+});
+document.getElementById('search-clear').addEventListener('click', () => {
+  searchQuery = '';
+  document.getElementById('search').value = '';
+  render();
+});
+
+/* ---------- Google auth UI wiring ---------- */
+function updateGoogleAuthUI() {
+  const setupPanel = document.getElementById('gsetup-panel');
+  const authRow = document.getElementById('google-auth-row');
+  const loginBtn = document.getElementById('login-btn');
+  if (!googleClientId) {
+    setupPanel.style.display = 'block';
+    authRow.style.display = 'none';
+    updateSyncIndicator(null);
+    document.getElementById('sync-status').textContent = 'Google Drive：請先設定 Client ID';
+    return;
+  }
+  setupPanel.style.display = 'none';
+  authRow.style.display = 'flex';
+  if (isSignedIn()) {
+    loginBtn.textContent = '✓ 已登入 Google';
+    loginBtn.classList.add('signed-in');
+  } else {
+    loginBtn.textContent = '🔑 登入 Google';
+    loginBtn.classList.remove('signed-in');
+    updateSyncIndicator('signedout');
+  }
+}
+
+document.getElementById('save-client-id-btn').addEventListener('click', () => {
+  const val = document.getElementById('client-id-input').value.trim();
+  if (!val) { toast('請貼上 Client ID'); return; }
+  saveGoogleClientId(val);
+  tokenClient = null;
+  updateGoogleAuthUI();
+  toast('已儲存，而家可以撳「登入 Google」');
+});
+
+document.getElementById('settings-link').addEventListener('click', () => {
+  const panel = document.getElementById('gsetup-panel');
+  const input = document.getElementById('client-id-input');
+  input.value = googleClientId || '';
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+});
+
+document.getElementById('login-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('login-btn');
+  btn.disabled = true;
+  btn.textContent = '登入緊…';
+  try {
+    await ensureAccessToken(true);
+    updateGoogleAuthUI();
+    toast('已登入 Google');
+    // Pull anything saved from another device, then push local state back up.
+    await loadItemStatesFromDrive();
+    render();
+    syncProgressToDrive();
+  } catch (err) {
+    toast('登入失敗：' + err.message);
+    updateGoogleAuthUI();
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+/* ---------- init ---------- */
+document.getElementById('test-drive-btn').addEventListener('click', testDriveConnection);
+document.getElementById('export-btn').addEventListener('click', exportProgress);
+document.getElementById('import-btn').addEventListener('click', () => {
+  document.getElementById('import-file-input').click();
+});
+document.getElementById('import-file-input').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (file) importProgressFromFile(file);
+  e.target.value = '';
+});
+(async function init() {
+  loadGoogleClientId();
+  render(); // show the list immediately with empty state while data loads
+  await loadItemStates(); // localStorage — instant, always available on a real hosted page
+  updateLocalStorageIndicator();
+  updateGoogleAuthUI();
+  if (googleClientId) initGis();
+  render();
+
+  // Note: signing in itself always needs a fresh tap (Google requires a user
+  // gesture for the consent popup) — Drive sync only starts once you sign in.
+})();
+
+// Warn before leaving if there are photos that haven't finished uploading, or
+// (in the unlikely event localStorage isn't available) unsaved progress.
+window.addEventListener('beforeunload', (e) => {
+  const unsavedPhotos = capturedPhotoCount();
+  const noLocalSave = localStorageWorks === false && Object.keys(itemStates).length > 0;
+  if (unsavedPhotos > 0 || noLocalSave) {
+    e.preventDefault();
+    e.returnValue = unsavedPhotos > 0
+      ? '仲有 ' + unsavedPhotos + ' 張相片未上傳完，離開前建議等埋。'
+      : '本機儲存未能使用，記得撳「匯出/分享進度」先至離開。';
+    return e.returnValue;
+  }
+});
+
+
+</script>
+</body>
+</html>
