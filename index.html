@@ -9,6 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="庫存核對">
 <title>倉庫庫存核對</title>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root {
     --bg: #F4F4F1;
@@ -67,6 +68,8 @@
     white-space: pre-wrap; word-break: break-all; background: #1C1C1A; color: #D8D8D0;
     border-radius: 7px; padding: 8px 10px; max-height: 180px; overflow-y: auto;
     margin-bottom: 8px; }
+  .gate-message { font-size: 13px; line-height: 1.6; color: var(--warn); background: #FBEFE3;
+    border: 1px solid #EAD3AE; border-radius: 9px; padding: 14px; margin: 4px 0 12px; }
   .pending-summary { display: flex; align-items: center; justify-content: space-between;
     gap: 8px; font-size: 11.5px; color: var(--warn); background: #FBEFE3;
     border: 1px solid #EAD3AE; border-radius: 7px; padding: 6px 10px; margin-bottom: 10px; }
@@ -83,7 +86,57 @@
     border: none; background: none; color: var(--ink-soft); font-size: 18px;
     padding: 4px 6px; cursor: pointer; display: none; }
 
+  .add-new-btn { width: 100%; margin-top: 8px; padding: 10px; border: 1px dashed var(--accent);
+    background: var(--accent-soft); color: var(--accent); border-radius: 9px; font-size: 13.5px;
+    font-weight: 600; cursor: pointer; }
+  .new-item-panel { margin-top: 8px; background: var(--card); border: 1px solid var(--line);
+    border-radius: 9px; padding: 12px; }
+  .new-item-panel input { width: 100%; padding: 9px 10px; border: 1px solid var(--line);
+    border-radius: 7px; font-size: 14px; margin-bottom: 10px; background: var(--card); color: var(--ink); }
+  .new-item-panel textarea { width: 100%; min-height: 60px; padding: 9px 10px; border: 1px solid var(--line);
+    border-radius: 7px; font-size: 13.5px; margin-bottom: 10px; background: var(--card); color: var(--ink);
+    font-family: inherit; resize: vertical; }
+  .sku-dropdown { position: relative; margin-top: -6px; margin-bottom: 10px; border: 1px solid var(--line);
+    border-radius: 7px; max-height: 220px; overflow-y: auto; background: var(--card); }
+  .sku-dropdown-item { padding: 9px 10px; border-bottom: 1px solid var(--line); cursor: pointer; font-size: 13px; }
+  .sku-dropdown-item:last-child { border-bottom: none; }
+  .sku-dropdown-item .n { font-weight: 600; }
+  .sku-dropdown-item .s { font-family: var(--mono); font-size: 11.5px; color: var(--ink-soft); }
+  .sku-selected { font-size: 12.5px; color: var(--ok); margin: -4px 0 10px; min-height: 1em; }
+  .new-item-panel select { width: 100%; padding: 9px 10px; border: 1px solid var(--line);
+    border-radius: 7px; font-size: 14px; margin-bottom: 10px; background: var(--card); color: var(--ink); }
+  .settings-section-title { font-size: 13.5px; font-weight: 700; margin-bottom: 6px; }
+  .settings-hint { font-size: 11.5px; color: var(--ink-soft); line-height: 1.5; margin-bottom: 10px; }
+  .steps-box { background: var(--accent-soft); border: 1px solid #C9DBEF; border-radius: 8px;
+    padding: 10px 12px; margin-bottom: 10px; font-size: 12.5px; line-height: 1.6; }
+  .steps-box-title { font-weight: 700; margin-bottom: 6px; }
+  .steps-box ol { margin: 0; padding-left: 18px; }
+  .steps-box li { margin-bottom: 6px; }
+  .steps-box li:last-child { margin-bottom: 0; }
+  .steps-box .mono { font-family: var(--mono); background: rgba(0,0,0,0.06); padding: 1px 4px; border-radius: 4px; }
+  .steps-box i { color: var(--ink-soft); }
+  .settings-divider { border-top: 1px solid var(--line); margin: 16px 0; }
+  .cf-list-item { display: flex; justify-content: space-between; align-items: center;
+    background: var(--bg); border: 1px solid var(--line); border-radius: 7px;
+    padding: 8px 10px; margin-bottom: 6px; font-size: 12.5px; }
+  .cf-list-item button { border: 1px solid #C0392B; background: var(--card); color: #C0392B;
+    font-size: 11px; border-radius: 6px; padding: 4px 9px; cursor: pointer; flex-shrink: 0; margin-left: 8px; }
+  .custom-fields-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+  .cf-text-field { flex: 1 1 100%; }
+  .cf-text-field input { width: 100%; padding: 8px 10px; border: 1px solid var(--line);
+    border-radius: 7px; font-size: 13.5px; background: var(--card); color: var(--ink); }
+
+  .extra-item { background: #FFF9EE; border: 1px solid #EAD3AE; border-radius: 10px;
+    margin-bottom: 8px; padding: 11px 13px; position: relative; }
+  .extra-item .tag { font-size: 10px; font-weight: 700; color: var(--partial); margin-bottom: 3px; }
+  .extra-item .n { font-size: 14px; font-weight: 600; }
+  .extra-item .s { font-family: var(--mono); font-size: 12px; color: var(--ink-soft); margin-top: 2px; }
+  .extra-item .r { font-size: 12.5px; color: var(--ink); margin-top: 6px; }
+  .extra-item .remove-extra-btn { position: absolute; top: 10px; right: 10px; border: none;
+    background: none; color: var(--ink-soft); font-size: 16px; cursor: pointer; padding: 2px 6px; }
+
   #list { padding: 10px 12px 0; }
+  #extra-list { padding: 10px 12px 0; }
   .loc-group { margin-bottom: 14px; }
   .loc-head { font-family: var(--mono); font-size: 12.5px; color: var(--ink-soft);
     padding: 6px 2px; letter-spacing: 0.02em; }
@@ -156,7 +209,7 @@
     border: 1px solid var(--line); }
   .photo-status { font-size: 12px; color: var(--ink-soft); }
 
-  .flag-row { margin: 12px 0; }
+  .flag-row { margin: 12px 0; display: flex; flex-wrap: wrap; gap: 6px; }
   .flag-btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line);
     background: var(--card); border-radius: 20px; padding: 8px 14px; font-size: 13px;
     color: var(--ink-soft); cursor: pointer; }
@@ -190,11 +243,14 @@
     <div class="progress" id="progress">載入中…</div>
 
     <div class="export-row">
-      <button class="export-btn" id="export-btn" type="button">📤 匯出/分享進度</button>
+      <button class="export-btn" id="export-csv-btn" type="button">📊 匯出報表 (CSV)</button>
       <button class="import-btn" id="import-btn" type="button">📥 匯入進度</button>
       <input type="file" id="import-file-input" accept="application/json" style="display:none">
     </div>
-    <div class="export-hint">Google Drive自動同步係主要保存方法；「匯出」係額外一重保險，隨時可以做。</div>
+    <div class="export-row">
+      <button class="import-btn" id="export-btn" type="button" style="flex:1">📤 匯出原始JSON（備份用）</button>
+    </div>
+    <div class="export-hint">Google Drive自動同步係主要保存方法；CSV報表可以直接用Excel/Numbers打開睇。</div>
     <div class="pending-summary" id="photo-batch-row" style="display:none"></div>
 
     <div class="sync-status" id="local-status">本機儲存：檢查緊…</div>
@@ -203,7 +259,7 @@
     <div class="gsetup-panel" id="gsetup-panel" style="display:none">
       <label class="field-label" for="client-id-input">貼上你嘅 Google OAuth Client ID</label>
       <input id="client-id-input" type="text" placeholder="xxxxxxxx.apps.googleusercontent.com">
-      <button class="save-client-id-btn" id="save-client-id-btn" type="button">儲存</button>
+      <button class="save-client-id-btn" id="save-client-id-btn" type="button">儲存設定</button>
     </div>
     <div class="google-auth-row" id="google-auth-row" style="display:none">
       <button class="login-btn" id="login-btn" type="button">🔑 登入 Google</button>
@@ -211,24 +267,137 @@
       <button class="settings-link" id="settings-link" type="button">⚙</button>
     </div>
     <div class="debug-panel" id="debug-panel" style="display:none"></div>
+
+    <div class="gate-message" id="gate-message" style="display:none">
+      🔒 要連接住 Google Drive先可以開始核對。全部核對記錄會即時同步Drive；如果中途斷線／登入過期，會暫停畀你繼續，直到重新登入為止。
+    </div>
+
+    <div id="gated-content">
     <div class="search-wrap">
       <input id="search" type="text" placeholder="輸入庫位 / SKU名稱 / 條碼搜索" autocomplete="off">
       <button class="search-clear" id="search-clear">✕</button>
     </div>
+
+    <button class="add-new-btn" id="add-new-toggle-btn" type="button">➕ 新增庫位記錄（系統冇嘅位）</button>
+    <div class="new-item-panel" id="new-item-panel" style="display:none">
+      <label class="field-label" for="new-loc-input">庫位</label>
+      <input id="new-loc-input" type="text" placeholder="例如 B01-01-0101" autocomplete="off">
+
+      <label class="field-label" for="new-sku-search">SKU（打幾隻字搜索）</label>
+      <input id="new-sku-search" type="text" placeholder="輸入SKU編號/名稱/條碼" autocomplete="off">
+      <div class="sku-dropdown" id="sku-dropdown" style="display:none"></div>
+      <div class="sku-selected" id="sku-selected"></div>
+
+      <label class="field-label" for="new-qty-input">件數</label>
+      <input id="new-qty-input" type="number" inputmode="numeric" placeholder="0">
+
+      <label class="field-label" for="new-remark-input">備註（可選）</label>
+      <input id="new-remark-input" type="text" placeholder="輸入備註...">
+
+      <button class="confirm-btn" id="save-new-item-btn" type="button" style="margin-top:10px">儲存呢筆記錄</button>
+    </div>
+
+    <button class="add-new-btn" id="app-settings-toggle-btn" type="button">⚙️ 資料 / 自訂欄位設定</button>
+    <div class="new-item-panel" id="app-settings-panel" style="display:none">
+      <div class="settings-section-title" id="owner-only-title" style="display:none">👤 同事授權管理（得你先睇到呢個部分）</div>
+      <div class="settings-hint" id="owner-only-hint" style="display:none">你自己（<span id="owner-email-display"></span>）一直都有權限，唔使加入呢個清單。</div>
+      <div class="steps-box" id="owner-only-steps" style="display:none">
+        <div class="steps-box-title">加新同事，要跟足呢4步（跟錯次序，佢會見唔到你嘅資料）：</div>
+        <ol>
+          <li>
+            <b>喺呢個app加佢個email</b><br>
+            落面個「一行一個email，或用逗號分隔」格度，貼佢個Google email（多過一個同事就一行一個），撳下面「儲存同事名單」。
+          </li>
+          <li>
+            <b>去 Google Cloud Console 加佢做 Test user</b><br>
+            1. 開 <span class="mono">console.cloud.google.com</span>，揀返你設定呢個app嗰個project<br>
+            2. 左邊選單 →「APIs &amp; Services」→「OAuth consent screen」<br>
+            3. 揀返上面個分頁/連結「Audience」或者「Test users」（介面版本唔同名可能唔同，搵住「Test users」呢個字）<br>
+            4. 撳「+ Add users」，貼返佢個email，撳「Save」<br>
+            <i>呢步同第1步係兩件唔同嘅嘢，兩樣都要做——第1步係app自己嘅授權名單，呢步先係Google畀唔畀佢個Google戶口用呢個未verify嘅app。冇做呢步，佢撳「登入Google」會即刻被Google拒絕。</i>
+          </li>
+          <li>
+            <b>去 Google Drive 分享個資料夾畀佢</b><br>
+            1. 開你自己個 Google Drive（<span class="mono">drive.google.com</span>），用嗰個同你登入呢個app一樣嘅戶口<br>
+            2. 喺「我的雲端硬碟」根目錄搵「Warehouse Inventory Check Photos」呢個資料夾（你之前上傳Excel/相片嗰陣app自動幫你開嘅）<br>
+            3. 右擊個資料夾 →「共用」（Share）<br>
+            4. 貼返佢個email，右邊權限揀「編輯者」（Editor），撳「傳送」/「共用」<br>
+            <i>要用返同一個email（同第1、2步一致），否則就算分享咗都連唔埋。</i>
+          </li>
+          <li>
+            <b>叫佢而家先第一次打開個app登入</b><br>
+            確保上面3步都做晒先叫佢撳link登入。如果佢之前已經試過登入（喺你未分享之前），佢個app會已經自己開咗一個屬於佢自己嘅新資料夾，見唔到你嘅資料——遇到呢種情況，等佢登入之後入「⚙」設定，撳「重新搜尋Drive資料夾」就救返。
+          </li>
+        </ol>
+      </div>
+      <textarea id="colleague-email-input" style="display:none" placeholder="一行一個email，或用逗號分隔"></textarea>
+      <button class="confirm-btn secondary" id="save-colleagues-btn" type="button" style="display:none">儲存同事名單</button>
+      <div class="settings-divider" id="owner-only-divider" style="display:none"></div>
+
+      <div class="settings-section-title">🔄 Drive疑難排解</div>
+      <div class="settings-hint">如果你係其他同事啱啱分享咗資料夾畀你，但個app見唔到佢哋嘅庫存資料（例如顯示「未有庫存資料」），撳呢個掣清走本機快取，重新搵一次啱嘅資料夾。</div>
+      <button class="undo-btn" id="reset-drive-cache-btn" type="button">重新搜尋Drive資料夾</button>
+      <div class="settings-divider"></div>
+
+      <div class="settings-section-title">📄 上傳新庫存 Excel</div>
+      <div class="settings-hint">會完全取代而家嘅 <span id="current-inv-count"></span> 項資料，同埋清空所有已確認記錄（備註、確認狀態、自訂欄位內容等）。資料會存入<b>你自己嘅私人Google Drive</b>，唔會寫入呢個公開網頁，其他人打開呢個link都睇唔到。欄位要同原本格式一樣：Location、SKU Code、SKU Barcode、SKU Name、Qty、SKU Length、SKU Width、SKU Height、SKU Weight。</div>
+      <input type="file" id="excel-upload-input" accept=".xlsx,.xls">
+      <button class="confirm-btn secondary" id="excel-upload-btn" type="button">上傳並取代</button>
+      <button class="undo-btn" id="restore-default-btn" type="button">清空全部庫存資料</button>
+
+      <div class="settings-divider"></div>
+
+      <div class="settings-section-title">🔧 自訂欄位</div>
+      <div class="settings-hint">新增欄位會出現喺每一條SKU/庫位記錄度。「跟庫位」= 每個庫位獨立填；「跟SKU」= 一個SKU填一次，全部庫位共用（好似量尺寸咁）。</div>
+      <div id="custom-fields-list"></div>
+      <label class="field-label" for="cf-label-input">名稱</label>
+      <input id="cf-label-input" type="text" placeholder="例如：歐洲板">
+      <label class="field-label" for="cf-type-input">類型</label>
+      <select id="cf-type-input">
+        <option value="button">掣（Confirm）</option>
+        <option value="text">文字輸入</option>
+      </select>
+      <label class="field-label" for="cf-scope-input">範圍</label>
+      <select id="cf-scope-input">
+        <option value="location">每個庫位獨立</option>
+        <option value="sku">跟SKU（一個SKU填一次，全部庫位共用）</option>
+      </select>
+      <button class="confirm-btn" id="add-custom-field-btn" type="button" style="margin-top:6px">新增欄位</button>
+    </div>
+    </div>
   </header>
+  <div id="extra-list"></div>
   <div id="list"></div>
 </div>
+
 <div class="toast" id="toast"></div>
 
 <script>
 /* ---------- inventory data (from uploaded report, sorted by location) ---------- */
-const INVENTORY = [{"loc":"B01-01-0101","sku":"RA011G-UKSSS","barcode":"855316004958","name":"Reactor 100 UK BLK","qty":24,"l":58.6,"w":51.8,"h":31,"wt":16.5},{"loc":"B01-01-0102","sku":"RA011G-UKSSS","barcode":"855316004958","name":"Reactor 100 UK BLK","qty":24,"l":58.6,"w":51.8,"h":31,"wt":16.5},{"loc":"B01-02-0101","sku":"RA011G-UKSSS","barcode":"855316004958","name":"Reactor 100 UK BLK","qty":24,"l":58.6,"w":51.8,"h":31,"wt":16.5},{"loc":"B01-02-0103","sku":"RA011G-UKSSS","barcode":"855316004958","name":"Reactor 100 UK BLK","qty":24,"l":58.6,"w":51.8,"h":31,"wt":16.5},{"loc":"B01-03-0102","sku":"RA011G-UKSSS","barcode":"855316004958","name":"Reactor 100 UK BLK","qty":28,"l":58.6,"w":51.8,"h":31,"wt":16.5},{"loc":"B01-03-0103","sku":"RA011G-UKSSS","barcode":"855316004958","name":"Reactor 100 UK BLK","qty":20,"l":58.6,"w":51.8,"h":31,"wt":16.5},{"loc":"B01-04-0102","sku":"RA011G-UKSSS","barcode":"855316004958","name":"Reactor 100 UK BLK","qty":1,"l":58.6,"w":51.8,"h":31,"wt":16.5},{"loc":"B01-04-0103","sku":"RA011G-UKSSS","barcode":"855316004958","name":"Reactor 100 UK BLK","qty":24,"l":58.6,"w":51.8,"h":31,"wt":16.5},{"loc":"B01-05-0101","sku":"RA011G-UKSSS","barcode":"855316004958","name":"Reactor 100 UK BLK","qty":24,"l":58.6,"w":51.8,"h":31,"wt":16.5},{"loc":"B01-05-0102","sku":"RA011G-UKSSS","barcode":"855316004958","name":"Reactor 100 UK BLK","qty":24,"l":58.6,"w":51.8,"h":31,"wt":16.5},{"loc":"B01-05-0103","sku":"RA011G-UKSSS","barcode":"855316004958","name":"Reactor 100 UK BLK","qty":24,"l":58.6,"w":51.8,"h":31,"wt":16.5},{"loc":"B01-06-0101","sku":"RA011G-UKSSS","barcode":"855316004958","name":"Reactor 100 UK BLK","qty":24,"l":58.6,"w":51.8,"h":31,"wt":16.5},{"loc":"B01-06-0102","sku":"RA011G-UKSSS","barcode":"855316004958","name":"Reactor 100 UK BLK","qty":24,"l":58.6,"w":51.8,"h":31,"wt":16.5},{"loc":"B01-06-0201","sku":"RA011G-UKSSS","barcode":"855316004958","name":"Reactor 100 UK BLK","qty":24,"l":58.6,"w":51.8,"h":31,"wt":16.5},{"loc":"B01-07-0103","sku":"RA011G-UKSSS","barcode":"855316004958","name":"Reactor 100 UK BLK","qty":24,"l":58.6,"w":51.8,"h":31,"wt":16.5},{"loc":"B01-10-0101","sku":"RA011G-UKSSS","barcode":"855316004958","name":"Reactor 100 UK BLK","qty":24,"l":58.6,"w":51.8,"h":31,"wt":16.5},{"loc":"B01-10-0102","sku":"RA011G-UKSSS","barcode":"855316004958","name":"Reactor 100 UK BLK","qty":23,"l":58.6,"w":51.8,"h":31,"wt":16.5},{"loc":"B01-10-0103","sku":"RA011G-UKSSS","barcode":"855316004958","name":"Reactor 100 UK BLK","qty":22,"l":58.6,"w":51.8,"h":31,"wt":16.5},{"loc":"B02-01-0101","sku":"RA011G-UKSSS","barcode":"855316004958","name":"Reactor 100 UK BLK","qty":24,"l":58.6,"w":51.8,"h":31,"wt":16.5},{"loc":"B02-01-0102","sku":"RA011G-UKSSS","barcode":"855316004958","name":"Reactor 100 UK BLK","qty":24,"l":58.6,"w":51.8,"h":31,"wt":16.5},{"loc":"B03-10-0102","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"B07-03-0102","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"B07-03-0103","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"B08-01-0201","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"B08-01-0202","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"B08-02-0201","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"B08-03-0201","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"B08-04-0101","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"B09-04-0202","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"B10-08-0103","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"B10-10-0102","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"B11-03-0103","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"B11-10-0101","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"B11-10-0103","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"B12-04-0101","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"B12-04-0103","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"B12-06-0102","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"B12-07-0101","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"B12-08-0103","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"B12-10-0101","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D01-01-0101","sku":"S5012G-UKSSS","barcode":"0855316004545","name":"Spark 2 Pearl","qty":5,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D01-01-0101","sku":"S5012G-UKSSS","barcode":"0855316004545","name":"Spark 2 Pearl","qty":30,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D01-01-0102","sku":"S5012G-UKSSS","barcode":"0855316004545","name":"Spark 2 Pearl","qty":40,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D01-01-0103","sku":"SF011G-UKSS_FBA","barcode":"SF011G-UKSS_FBA","name":"Spark Live UK BLK","qty":19,"l":43,"w":34,"h":56,"wt":16},{"loc":"D01-01-0103","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":4,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D01-01-0103","sku":"RA011G-UKSSS","barcode":"855316004958","name":"Reactor 100 UK BLK","qty":3,"l":58.6,"w":51.8,"h":31,"wt":16.5},{"loc":"D01-02-0101","sku":"RPD11M-UKSSS","barcode":"855316004989","name":"Reactor Control","qty":24,"l":22,"w":11,"h":8,"wt":0.77},{"loc":"D01-02-0101","sku":"RPD11M-UKSSS","barcode":"855316004989","name":"Reactor Control","qty":15,"l":22,"w":11,"h":8,"wt":0.77},{"loc":"D01-02-0102","sku":"IR121C-UNSSS","barcode":"IR121C-UNSSS","name":"RIFF - Black","qty":11,"l":15.8,"w":10,"h":6.1,"wt":0.287},{"loc":"D01-02-0102","sku":"MMESEBOCI00B5","barcode":"MMESEBOCI00B5","name":"DC Plug Adapter","qty":5,"l":12.5,"w":8,"h":1,"wt":0.07},{"loc":"D01-02-0201","sku":"RPD11M-UKSSS","barcode":"855316004989","name":"Reactor Control","qty":92,"l":22,"w":11,"h":8,"wt":0.77},{"loc":"D01-02-0201","sku":"RPD11M-UKSSS","barcode":"855316004989","name":"Reactor Control","qty":20,"l":22,"w":11,"h":8,"wt":0.77},{"loc":"D01-02-0201","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D01-03-0101","sku":"SHP01E-UKSSS","barcode":"855316004866","name":"Spark NEO","qty":42,"l":23.2,"w":22,"h":7.95,"wt":0.79},{"loc":"D01-03-0102","sku":"S1013G-UKSSS","barcode":"S1013G-UKSSS","name":"Spark MINI Vai","qty":149,"l":20,"w":18,"h":18,"wt":1.85},{"loc":"D01-03-0102","sku":"S1013G-UKSSS","barcode":"S1013G-UKSSS","name":"Spark MINI Vai","qty":9,"l":20,"w":18,"h":18,"wt":1.85},{"loc":"D01-03-0103","sku":"SHP01E-UKSSS","barcode":"855316004866","name":"Spark NEO","qty":162,"l":23.2,"w":22,"h":7.95,"wt":0.79},{"loc":"D01-03-0103","sku":"SHP01E-UKSSS","barcode":"855316004866","name":"Spark NEO","qty":6,"l":23.2,"w":22,"h":7.95,"wt":0.79},{"loc":"D01-03-0201","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D01-03-0303","sku":"MMESEBOGI00BA","barcode":"00855316004644","name":"Spark EDGE Gille_Sunburst","qty":4,"l":37.7,"w":32.6,"h":1,"wt":0.79},{"loc":"D01-03-0303","sku":"S0511G-UKSSS","barcode":"S0511G-UKSSS","name":"Spark Go","qty":16,"l":17,"w":12.5,"h":8,"wt":0.61},{"loc":"D01-03-0303","sku":"S1013G-UKSSS","barcode":"S1013G-UKSSS","name":"Spark MINI Vai","qty":85,"l":20,"w":18,"h":18,"wt":1.85},{"loc":"D01-03-0303","sku":"SWL21M-UKSSS","barcode":"855316004910","name":"Spark Link XLR BLK UK","qty":43,"l":10.9,"w":2.5,"h":2.7,"wt":0.18},{"loc":"D01-04-0102","sku":"S040CB9-UKBS","barcode":"S040CB9-UKBS","name":"Spark 40","qty":24,"l":49,"w":28,"h":27,"wt":7.2},{"loc":"D01-04-0102","sku":"S040CB9-UKBS","barcode":"S040CB9-UKBS","name":"Spark 40","qty":5,"l":49,"w":28,"h":27,"wt":7.2},{"loc":"D01-04-0103","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D01-04-0201","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D01-04-0202","sku":"SPD11M-UKSS","barcode":"SPD11M259006993","name":"Spark Control X","qty":260,"l":22,"w":10,"h":9.5,"wt":0.71},{"loc":"D01-04-0203","sku":"SF011G-UKSS_FBA","barcode":"SF011G-UKSS_FBA","name":"Spark Live UK BLK","qty":10,"l":43,"w":34,"h":56,"wt":16},{"loc":"D01-05-0101","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D01-05-0102","sku":"SPD11M-UKSS","barcode":"855316004811","name":"Spark Control X","qty":320,"l":22,"w":10,"h":9.5,"wt":0.71},{"loc":"D01-05-0103","sku":"SF011G-UKSS_FBA","barcode":"SF011G-UKSS_FBA","name":"Spark Live UK BLK","qty":19,"l":43,"w":34,"h":56,"wt":16},{"loc":"D01-05-0201","sku":"SF011G-UKSS","barcode":"SF011G-UKSS","name":"Spark Live UK BLK","qty":24,"l":56,"w":43,"h":34,"wt":16},{"loc":"D01-05-0202","sku":"SF011G-UKSS","barcode":"SF011G-UKSS","name":"Spark Live UK BLK","qty":24,"l":56,"w":43,"h":34,"wt":16},{"loc":"D01-05-0203","sku":"S040CBB-UKBS","barcode":"S040CBB-UKBS","name":"Spark Pearl UK","qty":12,"l":49,"w":28,"h":27,"wt":7.1},{"loc":"D01-05-0303","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":16,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D01-06-0101","sku":"S5012G-UKSSS","barcode":"0855316004545","name":"Spark 2 Pearl","qty":40,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D01-06-0102","sku":"SHP01E-UKSSS","barcode":"855316004866","name":"Spark NEO","qty":280,"l":23.2,"w":22,"h":7.95,"wt":0.79},{"loc":"D01-06-0103","sku":"SF011G-UKSS","barcode":"SF011G-UKSS","name":"Spark Live UK BLK","qty":24,"l":56,"w":43,"h":34,"wt":16},{"loc":"D01-06-0201","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D01-06-0201-HOLD","sku":"SE011M-UKSS_FBA","barcode":"SE011M-UKSS_FBA","name":"Spark CAB UK Black","qty":1,"l":46,"w":32,"h":61,"wt":15.8},{"loc":"D01-06-0301","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D01-06-0302","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D01-06-0303","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D01-07-0101","sku":"S6511G-UKSSS","barcode":"855316004774","name":"Spark EDGE UK BLK","qty":24,"l":38,"w":34,"h":42,"wt":8.8},{"loc":"D01-07-0102","sku":"SPL11G-UKSSS","barcode":"855316004996","name":"Spark Pedal","qty":64,"l":20.1,"w":12.2,"h":9.55,"wt":0.89},{"loc":"D01-07-0103","sku":"S6511G-UKSSS","barcode":"855316004774","name":"Spark EDGE UK BLK","qty":24,"l":38,"w":34,"h":42,"wt":8.8},{"loc":"D01-07-0201","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D01-07-0202","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D01-07-0203","sku":"S040CBB-UKBS","barcode":"855316004552","name":"Spark Pearl UK","qty":8,"l":49,"w":28,"h":27,"wt":7.1},{"loc":"D01-07-0301","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D01-07-0302","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D01-07-0303","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D01-08-0101","sku":"S040CBB-UKBS","barcode":"855316004552","name":"Spark Pearl UK","qty":52,"l":49,"w":28,"h":27,"wt":7.1},{"loc":"D01-08-0102","sku":"S040CBB-UKBS","barcode":"855316004552","name":"Spark Pearl UK","qty":56,"l":49,"w":28,"h":27,"wt":7.1},{"loc":"D01-08-0103","sku":"SPD0-FW004","barcode":"855316004705","name":"Spark Controller","qty":230,"l":26.5,"w":8,"h":5,"wt":0.6},{"loc":"D01-08-0103","sku":"SF011G-UKSS_FBA","barcode":"SF011G-UKSS_FBA","name":"Spark Live UK BLK","qty":6,"l":43,"w":34,"h":56,"wt":16},{"loc":"D01-08-0202","sku":"S040CBB-UKBS","barcode":"855316004552","name":"Spark Pearl UK","qty":48,"l":49,"w":28,"h":27,"wt":7.1},{"loc":"D01-09-0101","sku":"S1012G-UKSSS","barcode":"855316004729","name":"Spark MINI Pearl","qty":14,"l":20.5,"w":18,"h":18.5,"wt":1.7},{"loc":"D01-09-0102","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D01-09-0103","sku":"SF011G-UKSS_FBA","barcode":"SF011G-UKSS_FBA","name":"Spark Live UK BLK","qty":7,"l":43,"w":34,"h":56,"wt":16},{"loc":"D01-09-0201","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":8,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D01-10-0103","sku":"SPL11G-UKSSS","barcode":"855316004996","name":"Spark Pedal","qty":196,"l":20.1,"w":12.2,"h":9.55,"wt":0.89},{"loc":"D01-10-0103","sku":"SPL11G-UKSSS","barcode":"855316004996","name":"Spark Pedal","qty":101,"l":20.1,"w":12.2,"h":9.55,"wt":0.89},{"loc":"D01-11-0102","sku":"S5011G-UKBSS","barcode":"00855316004606","name":"SPARK 2 Handbag","qty":51,"l":49,"w":28,"h":13,"wt":0.68},{"loc":"D01-11-0103","sku":"S5011G-UKBSS","barcode":"00855316004606","name":"SPARK 2 Handbag","qty":160,"l":49,"w":28,"h":13,"wt":0.68},{"loc":"D01-11-0203-HOLD","sku":"IR121C-UNSSS","barcode":"IR121C-UNSSS","name":"RIFF - Black","qty":9,"l":15.8,"w":10,"h":6.1,"wt":0.287},{"loc":"D01-11-0303","sku":"S040BG1-UKBS","barcode":"S040BG1-UKBS","name":"Spark 40","qty":4,"l":40,"w":23,"h":9,"wt":0.68},{"loc":"D02-01-0102","sku":"MMES0BOBAA023","barcode":"855316004798","name":"Spark Battery 6000mAh UK","qty":45,"l":13,"w":9.3,"h":9,"wt":0.54},{"loc":"D02-02-0102","sku":"S040CBB-UKBS","barcode":"S040CBB-UKBS","name":"Spark Pearl UK","qty":24,"l":49,"w":28,"h":27,"wt":7.1},{"loc":"D02-02-0103","sku":"S040CBB-UKBS","barcode":"S040CBB-UKBS","name":"Spark Pearl UK","qty":56,"l":49,"w":28,"h":27,"wt":7.1},{"loc":"D02-03-0102","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":25,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D02-03-0103","sku":"SF011G-UKSS","barcode":"SF011G-UKSS","name":"Spark Live UK BLK","qty":7,"l":56,"w":43,"h":34,"wt":16},{"loc":"D02-03-0103","sku":"SF011G-UKSS","barcode":"SF011G-UKSS","name":"Spark Live UK BLK","qty":2,"l":56,"w":43,"h":34,"wt":16},{"loc":"D02-04-0101","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D02-04-0102","sku":"SF011G-UKSS","barcode":"SF011G-UKSS","name":"Spark Live UK BLK","qty":24,"l":56,"w":43,"h":34,"wt":16},{"loc":"D02-04-0103","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D02-05-0101","sku":"SF011G-UKSS_FBA","barcode":"SF011G-UKSS_FBA","name":"Spark Live UK BLK","qty":16,"l":43,"w":34,"h":56,"wt":16},{"loc":"D02-05-0102","sku":"SF011G-UKSS_FBA","barcode":"SF011G-UKSS_FBA","name":"Spark Live UK BLK","qty":12,"l":43,"w":34,"h":56,"wt":16},{"loc":"D02-05-0103","sku":"SF011G-UKSS_FBA","barcode":"SF011G-UKSS_FBA","name":"Spark Live UK BLK","qty":18,"l":43,"w":34,"h":56,"wt":16},{"loc":"D02-06-0102","sku":"S1012G-UKSSS","barcode":"855316004729","name":"Spark MINI Pearl","qty":74,"l":20.5,"w":18,"h":18.5,"wt":1.7},{"loc":"D02-06-0102","sku":"S1012G-UKSSS","barcode":"855316004729","name":"Spark MINI Pearl","qty":4,"l":20.5,"w":18,"h":18.5,"wt":1.7},{"loc":"D02-06-0103","sku":"MPD00077031","barcode":"MPD00077031","name":"MPD00077031","qty":9,"l":30,"w":3,"h":1,"wt":1},{"loc":"D02-06-0103","sku":"MWS01554011","barcode":"MWS01554011","name":"MWS01554011","qty":8,"l":20,"w":2,"h":1,"wt":1},{"loc":"D02-06-0103","sku":"PAS03913001","barcode":"PAS03913001","name":"Spark 2 Handle Strap (BK)","qty":44,"l":30,"w":4,"h":1,"wt":0.08},{"loc":"D02-06-0103","sku":"PAS03914001","barcode":"PAS03914001","name":"Spark 2 Handle Strap (WHT)","qty":50,"l":30,"w":4,"h":0.1,"wt":0.08},{"loc":"D02-06-0103","sku":"PAS03915001","barcode":"PAS03915001","name":"Type C cable","qty":29,"l":8,"w":4,"h":1,"wt":0.01},{"loc":"D02-06-0103","sku":"PAS03916001","barcode":"PAS03916001","name":"Spark 2 PSU","qty":51,"l":20,"w":5,"h":4,"wt":0.2},{"loc":"D02-06-0103","sku":"PAS03918001","barcode":"PAS03918001","name":"Spark 2 UK Power cable","qty":46,"l":20,"w":5,"h":4,"wt":0.1},{"loc":"D02-06-0103","sku":"165-00500UO00-E","barcode":"165-00500UO00-E","name":"Spark LINK USB Y cable (A to C)","qty":38,"l":10,"w":4,"h":1,"wt":8},{"loc":"D02-06-0103","sku":"PAS04123001(No Box)","barcode":"PAS04123001(No Box)","name":"PAS04123001","qty":15,"l":22.5,"w":13.5,"h":5,"wt":0.4},{"loc":"D02-07-0101","sku":"SF011G-UKSS_FBA","barcode":"SF011G-UKSS_FBA","name":"Spark Live UK BLK","qty":17,"l":43,"w":34,"h":56,"wt":16},{"loc":"D02-07-0102","sku":"SF011G-UKSS_FBA","barcode":"SF011G-UKSS_FBA","name":"Spark Live UK BLK","qty":20,"l":43,"w":34,"h":56,"wt":16},{"loc":"D02-07-0103","sku":"S0511G-UKSSS","barcode":"S0511G-UKSSS","name":"Spark Go","qty":30,"l":17,"w":12.5,"h":8,"wt":0.61},{"loc":"D02-07-0103","sku":"S0511G-UKSSS","barcode":"S0511G-UKSSS","name":"Spark Go","qty":50,"l":17,"w":12.5,"h":8,"wt":0.61},{"loc":"D02-08-0101","sku":"S0512G-UKSSS","barcode":"S0512G-UKSSS","name":"Spark Go 白色","qty":281,"l":16.9,"w":12.6,"h":8,"wt":0.6},{"loc":"D02-08-0101","sku":"S0512G-UKSSS","barcode":"S0512G-UKSSS","name":"Spark Go 白色","qty":10,"l":16.9,"w":12.6,"h":8,"wt":0.6},{"loc":"D02-08-0102","sku":"S0511G-UKSSS","barcode":"S0511G-UKSSS","name":"Spark Go","qty":660,"l":17,"w":12.5,"h":8,"wt":0.61},{"loc":"D02-08-0103","sku":"MMESEBOGI00B8","barcode":"00855316004620","name":"Spark Edge Alternate Grille","qty":28,"l":37.7,"w":32.6,"h":1,"wt":0.79},{"loc":"D02-08-0103","sku":"MMESEBOGI00B9","barcode":"00855316004637","name":"Spark EDGE Gille_On The Edge","qty":11,"l":37.7,"w":32.6,"h":1,"wt":0.79},{"loc":"D02-09-0101","sku":"SHP11E-UKSSS","barcode":"00855316004927","name":"Spark NEO Core","qty":24,"l":21.8,"w":24.6,"h":6.3,"wt":0.7},{"loc":"D02-09-0101","sku":"SHP11E-UKSSS","barcode":"00855316004927","name":"Spark NEO Core","qty":170,"l":21.8,"w":24.6,"h":6.3,"wt":0.7},{"loc":"D02-09-0102","sku":"S5011G-UKSSS","barcode":"0855316004767","name":"Spark 2","qty":26,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D02-09-0103","sku":"S6511G-UKSSS","barcode":"00855316004774","name":"Spark EDGE UK BLK","qty":15,"l":38,"w":34,"h":42,"wt":8.8},{"loc":"D02-09-0103","sku":"S6511G-UKSSS","barcode":"00855316004774","name":"Spark EDGE UK BLK","qty":1,"l":38,"w":34,"h":42,"wt":8.8},{"loc":"D02-10-0101","sku":"SWL21M-UKSSS","barcode":"855316004910","name":"Spark Link XLR BLK UK","qty":400,"l":10.9,"w":2.5,"h":2.7,"wt":0.18},{"loc":"D02-10-0102","sku":"SWL11M-UKSS","barcode":"855316004859","name":"Spark Link UK","qty":299,"l":14.1,"w":13.7,"h":3.1,"wt":0.192},{"loc":"D02-10-0102","sku":"SWL11M-UKSS","barcode":"855316004859","name":"Spark Link UK","qty":9,"l":14.1,"w":13.7,"h":3.1,"wt":0.192},{"loc":"D02-11-0101","sku":"S040CBB-UKBS","barcode":"S040CBB-UKBS","name":"Spark Pearl UK","qty":25,"l":49,"w":28,"h":27,"wt":7.1},{"loc":"D02-11-0102","sku":"S040CBB-UKBS","barcode":"S040CBB-UKBS","name":"Spark Pearl UK","qty":56,"l":49,"w":28,"h":27,"wt":7.1},{"loc":"D02-11-0103","sku":"S040CBB-UKBS","barcode":"S040CBB-UKBS","name":"Spark Pearl UK","qty":56,"l":49,"w":28,"h":27,"wt":7.1},{"loc":"D03-01-0101","sku":"SHP11E-UKSSS","barcode":"00855316004927","name":"Spark NEO Core","qty":300,"l":21.8,"w":24.6,"h":6.3,"wt":0.7},{"loc":"D03-01-0102","sku":"SF011G-UKSS","barcode":"SF011G-UKSS","name":"Spark Live UK BLK","qty":25,"l":56,"w":43,"h":34,"wt":16},{"loc":"D03-01-0102","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":3,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D03-02-0102","sku":"S1013G-UKSSS","barcode":"00855316004569","name":"Spark MINI Vai","qty":158,"l":20,"w":18,"h":18,"wt":1.85},{"loc":"D03-02-0103","sku":"SF011G-UKSS","barcode":"SF011G-UKSS","name":"Spark Live UK BLK","qty":24,"l":56,"w":43,"h":34,"wt":16},{"loc":"D03-02-0201","sku":"SE011M-UKSS","barcode":"855316004804","name":"Spark CAB 黑色","qty":9,"l":46,"w":32,"h":61,"wt":15.8},{"loc":"D03-02-0201","sku":"SE011M-UKSS","barcode":"855316004804","name":"Spark CAB 黑色","qty":6,"l":46,"w":32,"h":61,"wt":15.8},{"loc":"D03-02-0202","sku":"SE011M-UKSS","barcode":"855316004804","name":"Spark CAB 黑色","qty":16,"l":46,"w":32,"h":61,"wt":15.8},{"loc":"D03-04-0101","sku":"SE012M-UKSS","barcode":"SE012M-UKSS","name":"Spark Cab Pearl","qty":8,"l":46,"w":32,"h":61,"wt":16},{"loc":"D03-04-0103","sku":"S1013G-UKSSS","barcode":"00855316004569","name":"Spark MINI Vai","qty":243,"l":20,"w":18,"h":18,"wt":1.85},{"loc":"D03-04-0303","sku":"SE011M-UKSS","barcode":"855316004804","name":"Spark CAB 黑色","qty":16,"l":46,"w":32,"h":61,"wt":15.8},{"loc":"D03-05-0103","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D03-06-0102","sku":"SF011G-UKSS","barcode":"SF011G-UKSS","name":"Spark Live UK BLK","qty":24,"l":56,"w":43,"h":34,"wt":16},{"loc":"D03-06-0103","sku":"SE012M-UKSS","barcode":"SE012M-UKSS","name":"Spark Cab Pearl","qty":24,"l":46,"w":32,"h":61,"wt":16},{"loc":"D03-07-0101","sku":"MMES0BOBAA023","barcode":"855316004798","name":"Spark Battery 6000mAh UK","qty":900,"l":13,"w":9.3,"h":9,"wt":0.54},{"loc":"D03-07-0102","sku":"SE012M-UKSS","barcode":"SE012M-UKSS","name":"Spark Cab Pearl","qty":24,"l":46,"w":32,"h":61,"wt":16},{"loc":"D03-08-0101","sku":"S1012G-UKSSS_FBA","barcode":"S1012G-UKSSS_FBA","name":"Spark MINI - Pearl","qty":42,"l":20.5,"w":18,"h":18.5,"wt":1.7},{"loc":"D03-08-0102","sku":"S1012G-UKSSS_FBA","barcode":"S1012G-UKSSS_FBA","name":"Spark MINI - Pearl","qty":68,"l":20.5,"w":18,"h":18.5,"wt":1.7},{"loc":"D03-08-0103","sku":"S1011G-UKSSS","barcode":"S1011G-UKSSS","name":"Spark MINI - Black","qty":226,"l":20.5,"w":18,"h":18.5,"wt":1.7},{"loc":"D03-08-0103","sku":"S1011G-UKSSS","barcode":"S1011G-UKSSS","name":"Spark MINI - Black","qty":18,"l":20.5,"w":18,"h":18.5,"wt":1.7},{"loc":"D03-09-0101","sku":"S040CBB-UKBS","barcode":"S040CBB-UKBS","name":"Spark Pearl UK","qty":51,"l":49,"w":28,"h":27,"wt":7.1},{"loc":"D03-09-0102","sku":"S0511G-UKBG","barcode":"S0511G-UKBG","name":"Spark Go 音箱保護盒","qty":218,"l":19,"w":13,"h":8,"wt":0.27},{"loc":"D03-10-0101","sku":"S0512G-UKSSS","barcode":"S0512G-UKSSS","name":"Spark Go 白色","qty":88,"l":16.9,"w":12.6,"h":8,"wt":0.6},{"loc":"D03-10-0101","sku":"ABNHH2401-A001","barcode":"ABNHH2401-A001","name":"ABNHH2401-A001","qty":41,"l":20,"w":15,"h":3,"wt":0.05},{"loc":"D03-10-0103","sku":"COSSSPW190303","barcode":"COSSSPW190303","name":"power cable for Spark","qty":52,"l":24,"w":24,"h":6,"wt":0.48},{"loc":"D03-11-0101","sku":"AA100330R2-AT-CFM","barcode":"AA100330R2-AT-CFM","name":"USB-A to 9V Charging DC Cable","qty":37,"l":16,"w":7,"h":3,"wt":0.08},{"loc":"D03-11-0101","sku":"MACCBUB010102","barcode":"MACCBUB010102","name":"USB-A to USB-B Cable","qty":14,"l":15,"w":10,"h":2,"wt":0.06},{"loc":"D03-11-0101","sku":"MACKB22150101","barcode":"MACKB22150101","name":"SPARK40 CAP KNOB RoHS","qty":350,"l":2,"w":2,"h":2,"wt":0.1},{"loc":"D03-11-0101","sku":"MMES0BOGI00R2","barcode":"MMES0BOGI00R2","name":"Gill-R for Spark Mini_EU","qty":172,"l":13.4,"w":14,"h":2,"wt":0.102},{"loc":"D03-11-0101","sku":"MMES0BOSDHO002","barcode":"MMES0BOSDHO002","name":"Carrying Strap for Spark GO (Black)","qty":18,"l":18,"w":15,"h":1,"wt":0.01},{"loc":"D03-11-0101","sku":"MMES0BOSDHO003","barcode":"MMES0BOSDHO003","name":"Carrying Strap for Spark GO (White)","qty":18,"l":18,"w":15,"h":1,"wt":0.01},{"loc":"D03-11-0101","sku":"MMES0BOSDHO009","barcode":"MMES0BOSDHO009","name":"Spark 2 Handbag Strap","qty":92,"l":21,"w":5,"h":8,"wt":0.1},{"loc":"D03-11-0101","sku":"MMES140ST0101","barcode":"MMES140ST0101","name":"Carrying Strap for Spark (Black)","qty":21,"l":61,"w":4.5,"h":1,"wt":0.02},{"loc":"D03-11-0101","sku":"MMESEBOCI00B4","barcode":"MMESEBOCI00B4","name":"DC Plug Adapter for Spark 2","qty":129,"l":1.25,"w":1,"h":1,"wt":0.07},{"loc":"D03-11-0101","sku":"PAS03192007","barcode":"PAS03192007","name":"USB-C to USB-A Cable","qty":37,"l":15,"w":10,"h":2,"wt":0.06},{"loc":"D03-11-0101","sku":"PAS03192008(BK)","barcode":"PAS03192008(BK)","name":"Handle Strap (Black)","qty":30,"l":40,"w":10,"h":2,"wt":0.05},{"loc":"D03-11-0101","sku":"PAS03192008(WHITE)","barcode":"PAS03192008(White)","name":"Handle Strap (White)","qty":9,"l":40,"w":10,"h":2,"wt":0.08},{"loc":"D03-11-0101","sku":"PIN-LOCK-SPARKGO","barcode":"PIN-LOCK-SPARKGO","name":"Strap lock for Spark GO","qty":16,"l":16,"w":18,"h":1,"wt":0.01},{"loc":"D03-11-0103","sku":"SF011G-UKSS","barcode":"SF011G-UKSS","name":"Spark Live UK BLK","qty":24,"l":56,"w":43,"h":34,"wt":16},{"loc":"D04-01-0101","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D04-01-0102","sku":"S040CB9-UKBS","barcode":"S040CB9-UKBS","name":"Spark 40","qty":32,"l":49,"w":28,"h":27,"wt":7.2},{"loc":"D04-01-0102","sku":"RPD11M-UKSSS","barcode":"855316004989","name":"Reactor Control","qty":254,"l":22,"w":11,"h":8,"wt":0.77},{"loc":"D04-01-0103","sku":"S040CB9-UKBS","barcode":"S040CB9-UKBS","name":"Spark 40","qty":32,"l":49,"w":28,"h":27,"wt":7.2},{"loc":"D04-01-0103","sku":"RPD11M-UKSSS","barcode":"855316004989","name":"Reactor Control","qty":256,"l":22,"w":11,"h":8,"wt":0.77},{"loc":"D04-03-0101","sku":"RPD11M-UKSSS","barcode":"855316004989","name":"Reactor Control","qty":288,"l":22,"w":11,"h":8,"wt":0.77},{"loc":"D04-05-0101","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D04-05-0102","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D04-05-0103","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D04-08-0103","sku":"COSSSPW190303","barcode":"855316004514","name":"power cable for Spark","qty":1,"l":24,"w":24,"h":6,"wt":0.48},{"loc":"D04-08-0103","sku":"IR121C-UNSSS","barcode":"855316004651","name":"RIFF - Black","qty":4,"l":15.8,"w":10,"h":6.1,"wt":0.287},{"loc":"D04-08-0103","sku":"MMES0BOBAA023","barcode":"855316004798","name":"Spark Battery 6000mAh UK","qty":1,"l":13,"w":9.3,"h":9,"wt":0.54},{"loc":"D04-08-0103","sku":"MMES0BOSDHO009","barcode":"MMES0BOSDHO009","name":"Spark 2 Handbag Strap","qty":1,"l":21,"w":5,"h":8,"wt":0.1},{"loc":"D04-08-0103","sku":"S0511G-UKSSS","barcode":"S0511G-UKSSS","name":"Spark Go","qty":1,"l":17,"w":12.5,"h":8,"wt":0.61},{"loc":"D04-08-0103","sku":"S1013G-UKSSS","barcode":"855316004569","name":"Spark MINI Vai","qty":1,"l":20,"w":18,"h":18,"wt":1.85},{"loc":"D04-08-0103","sku":"S5011G-UKBSS","barcode":"855316004606","name":"SPARK 2 Handbag","qty":4,"l":49,"w":28,"h":13,"wt":0.68},{"loc":"D04-08-0103","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":8,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D04-08-0103","sku":"S5012G-UKSSS","barcode":"0855316004545","name":"Spark 2 Pearl","qty":3,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D04-08-0103","sku":"PAS03916001","barcode":"PAS03916001","name":"Spark 2 PSU","qty":1,"l":20,"w":5,"h":4,"wt":0.2},{"loc":"D04-08-0103","sku":"PAS03918001","barcode":"PAS03918001","name":"Spark 2 UK Power cable","qty":1,"l":20,"w":5,"h":4,"wt":0.1},{"loc":"D04-08-0103","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":1,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D04-09-0101","sku":"S5011G-UKSSS","barcode":"0855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D04-09-0102","sku":"S5011G-UKSSS","barcode":"0855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D04-09-0103","sku":"S5011G-UKSSS","barcode":"0855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D04-10-0101","sku":"S5011G-UKSSS","barcode":"0855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D04-10-0102","sku":"S5011G-UKSSS","barcode":"0855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D04-10-0103","sku":"S5011G-UKSSS","barcode":"0855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D04-11-0101","sku":"S5011G-UKSSS","barcode":"0855316004767","name":"Spark 2","qty":28,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D04-11-0101","sku":"S5011G-UKSSS","barcode":"0855316004767","name":"Spark 2","qty":32,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D05-01-0102","sku":"R5011G-UKSSS","barcode":"855316004941","name":"Reactor 50 UK BLK","qty":32,"l":51.4,"w":47.3,"h":29,"wt":12},{"loc":"D05-08-0101","sku":"S5011G-UKSSS","barcode":"0855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D05-08-0102","sku":"S5011G-UKSSS","barcode":"0855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D05-08-0103","sku":"S5011G-UKSSS","barcode":"0855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D05-09-0101","sku":"S5011G-UKSSS","barcode":"0855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D05-09-0102","sku":"S5011G-UKSSS","barcode":"0855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D05-09-0103","sku":"S5011G-UKSSS","barcode":"0855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D05-10-0101","sku":"S5011G-UKSSS","barcode":"0855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D05-10-0102","sku":"S5011G-UKSSS","barcode":"0855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D05-10-0103","sku":"S5011G-UKSSS","barcode":"0855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D05-11-0101","sku":"S5011G-UKSSS","barcode":"0855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D05-11-0102","sku":"S5011G-UKSSS","barcode":"0855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D05-11-0103","sku":"S5011G-UKSSS","barcode":"0855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6},{"loc":"D06-03-0103","sku":"S5011G-UKSSS","barcode":"855316004767","name":"Spark 2","qty":60,"l":44,"w":34,"h":24,"wt":7.6}];
+const INVENTORY_DEFAULT = []; // intentionally empty — no company data ships in this public file; real inventory lives in your private Google Drive
+
+let INVENTORY = INVENTORY_DEFAULT;
 
 /* ---------- state ---------- */
 let itemStates = {};      // key -> {remark, confirmedAt, notAPallet, sizeDiscrepancy, hasPhoto}
 let pendingPhotos = {};   // key -> [{dataUrl, base64}, ...]  — in-memory only for this session
 let capturedPhotos = {};  // key -> [{dataUrl, base64, sku, loc, ts}, ...] — accumulates for one batch share
 let skuSpecStatus = {};   // sku -> 'correct' | 'incorrect' — applies to ALL locations of that SKU
+let extraItems = {};      // id -> {loc, sku, skuName, barcode, qty, remark, addedAt} — off-system finds
+let customFields = {};    // id -> {id, label, type:'button'|'text', scope:'location'|'sku', createdAt}
+let customFieldValues = {}; // fieldId -> { (itemKey or sku) -> value }
+let newItemSelectedSku = null; // temp holder while the "add new location" form is open
+
+// De-duplicated SKU list (one entry per SKU code) for the autocomplete search.
+function buildSkuList() {
+  const seen = {};
+  const list = [];
+  INVENTORY.forEach(it => {
+    if (!seen[it.sku]) { seen[it.sku] = true; list.push({ sku: it.sku, name: it.name, barcode: it.barcode }); }
+  });
+  return list;
+}
+let SKU_LIST = buildSkuList();
 let expandedKey = null;
 let searchQuery = '';
 let driveFolderId = null;      // in-memory only — re-discovered each time the app opens
@@ -237,6 +406,7 @@ let syncInFlight = false;
 
 const DRIVE_FOLDER_NAME = 'Warehouse Inventory Check Photos';
 const DRIVE_PROGRESS_FILENAME = 'inventory_check_progress.json';
+const DRIVE_INVENTORY_FILENAME = 'inventory_master.json';
 
 function itemKey(it) { return it.loc + '|' + it.sku + '|' + it.barcode; }
 function photoFilename(it, index) {
@@ -283,6 +453,19 @@ async function loadDriveFolderId() { driveFolderId = lsGet('driveFolderId'); }
 async function saveDriveFolderId(id) { driveFolderId = id; lsSet('driveFolderId', id); }
 async function loadDriveProgressFileId() { driveProgressFileId = lsGet('driveProgressFileId'); }
 async function saveDriveProgressFileId(id) { driveProgressFileId = id; lsSet('driveProgressFileId', id); }
+
+/* Clears the cached Drive folder/file IDs so the next getOrCreateDriveFolder()
+   call re-searches by name instead of reusing a stale ID. Needed when someone
+   signed in BEFORE the owner shared the folder with them — their app would
+   have already created its own empty folder and cached that ID, so simply
+   sharing the real folder afterwards isn't enough; they need this reset too. */
+function resetCachedDriveIds() {
+  driveFolderId = null;
+  driveProgressFileId = null;
+  driveInventoryFileId = null;
+  localStorage.removeItem('driveFolderId');
+  localStorage.removeItem('driveProgressFileId');
+}
 async function loadPendingPhotoQueue() { /* not persisted — lost if the tab closes mid-upload */ }
 async function savePendingPhotoQueue() { /* no-op, see above */ }
 
@@ -291,7 +474,42 @@ let googleClientId = null;
 let tokenClient = null;
 let accessToken = null;
 let tokenExpiresAt = 0;
-const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+// Broad "drive" scope (not just drive.file) so an authorized colleague's own
+// sign-in can read/write the SAME Drive folder once you've shared it with
+// them in Google Drive — drive.file would only ever show each person their
+// own siloed files, which is why colleagues couldn't see your data before.
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/userinfo.email';
+let signedInEmail = null;
+
+// Change this to YOUR OWN Google account email before publishing. The owner
+// is always authorized and is the only one who can manage the colleague
+// allow-list below — this can't be bypassed by editing localStorage, because
+// it's baked into the code and checked against your real signed-in identity.
+const OWNER_EMAIL = 'yanwingidy@gmail.com';
+
+function isOwner() { return signedInEmail && signedInEmail.toLowerCase() === OWNER_EMAIL.toLowerCase(); }
+
+function getAuthorizedEmails() {
+  const raw = lsGet('authorizedEmails') || '';
+  return raw.split(/[\n,;]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+}
+function saveAuthorizedEmails(raw) { lsSet('authorizedEmails', raw); }
+
+function isEmailAuthorized(email) {
+  if (!email) return false;
+  const e = email.toLowerCase();
+  if (e === OWNER_EMAIL.toLowerCase()) return true; // owner is always allowed
+  return getAuthorizedEmails().includes(e);
+}
+
+async function fetchSignedInEmail() {
+  const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+    headers: { Authorization: 'Bearer ' + accessToken }
+  });
+  if (!res.ok) throw new Error('攞唔到 Google 帳戶資料 (HTTP ' + res.status + ')');
+  const data = await res.json();
+  return data.email || null;
+}
 
 function loadGoogleClientId() { googleClientId = lsGet('googleClientId'); return googleClientId; }
 function saveGoogleClientId(id) { googleClientId = id; lsSet('googleClientId', id); }
@@ -339,6 +557,7 @@ async function driveApiFetch(url, options) {
   const res = await fetch(url, options);
   if (res.status === 401) {
     accessToken = null;
+    signedInEmail = null;
     updateGoogleAuthUI();
     throw new Error('Google 登入已失效，請重新撳「登入 Google」');
   }
@@ -461,6 +680,60 @@ async function getOrCreateProgressFileId(folderId) {
   return id;
 }
 
+/* The real inventory (SKU/location data) lives here, not in the public HTML.
+   drive.file scope means each signed-in Google account only ever sees files
+   IT created — so a stranger signing in with a different account gets an
+   empty inventory, never yours, even if they bypass the email allow-list. */
+let driveInventoryFileId = null;
+
+async function getOrCreateInventoryFileId(folderId) {
+  if (driveInventoryFileId) return driveInventoryFileId;
+  let id = await driveFindFileInFolder(DRIVE_INVENTORY_FILENAME, folderId);
+  if (!id) {
+    const res = await driveApiFetch('https://www.googleapis.com/drive/v3/files', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: DRIVE_INVENTORY_FILENAME, parents: [folderId], mimeType: 'application/json' })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error && data.error.message || '無法建立庫存主檔');
+    id = data.id;
+  }
+  driveInventoryFileId = id;
+  return id;
+}
+
+async function saveInventoryToDrive() {
+  const folderId = await getOrCreateDriveFolder();
+  const fileId = await getOrCreateInventoryFileId(folderId);
+  const res = await driveApiFetch('https://www.googleapis.com/upload/drive/v3/files/' + fileId + '?uploadType=media', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(INVENTORY)
+  });
+  if (!res.ok) { const data = await res.json(); throw new Error(data.error && data.error.message || '上傳庫存主檔失敗'); }
+}
+
+async function loadInventoryFromDrive() {
+  try {
+    const folderId = await getOrCreateDriveFolder();
+    const fileId = await getOrCreateInventoryFileId(folderId);
+    const res = await driveApiFetch('https://www.googleapis.com/drive/v3/files/' + fileId + '?alt=media');
+    if (!res.ok) return false;
+    const text = await res.text();
+    if (!text || !text.trim()) return false;
+    const parsed = JSON.parse(text);
+    if (!Array.isArray(parsed) || parsed.length === 0) return false;
+    INVENTORY = parsed;
+    SKU_LIST = buildSkuList();
+    lsSet('customInventoryData', JSON.stringify(INVENTORY)); // fast local cache for next load
+    return true;
+  } catch (e) {
+    console.error('load inventory from drive failed', e);
+    return false;
+  }
+}
+
 async function readProgressFileFromDrive(fileId) {
   // Real Drive API — ?alt=media returns the exact raw file bytes, no
   // paraphrasing/decoding tricks needed (unlike the Claude-MCP version).
@@ -472,14 +745,20 @@ async function readProgressFileFromDrive(fileId) {
 }
 
 function progressPayload() {
-  return { itemStates: itemStates, skuSpecStatus: skuSpecStatus };
+  return {
+    itemStates: itemStates, skuSpecStatus: skuSpecStatus, extraItems: extraItems,
+    customFields: customFields, customFieldValues: customFieldValues
+  };
 }
 
 function applyProgressPayload(obj) {
   if (!obj || typeof obj !== 'object') return;
-  if (obj.itemStates || obj.skuSpecStatus) {
+  if (obj.itemStates || obj.skuSpecStatus || obj.extraItems || obj.customFields) {
     itemStates = obj.itemStates && typeof obj.itemStates === 'object' ? obj.itemStates : {};
     skuSpecStatus = obj.skuSpecStatus && typeof obj.skuSpecStatus === 'object' ? obj.skuSpecStatus : {};
+    extraItems = obj.extraItems && typeof obj.extraItems === 'object' ? obj.extraItems : {};
+    customFields = obj.customFields && typeof obj.customFields === 'object' ? obj.customFields : {};
+    customFieldValues = obj.customFieldValues && typeof obj.customFieldValues === 'object' ? obj.customFieldValues : {};
   } else {
     // backward-compat: older exports/Drive files stored a flat itemStates object
     itemStates = obj;
@@ -646,7 +925,10 @@ async function exportProgress() {
     exportedAt: new Date().toISOString(),
     itemCount: Object.keys(itemStates).length,
     itemStates: itemStates,
-    skuSpecStatus: skuSpecStatus
+    skuSpecStatus: skuSpecStatus,
+    extraItems: extraItems,
+    customFields: customFields,
+    customFieldValues: customFieldValues
   };
   const filename = 'inventory_progress_' + new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-') + '.json';
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
@@ -659,15 +941,81 @@ async function exportProgress() {
   }
 }
 
+function csvCell(v) {
+  if (v == null) return '';
+  const s = String(v);
+  return (s.includes(',') || s.includes('"') || s.includes('\n')) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+async function exportCsvReport() {
+  const cfIds = Object.keys(customFields);
+  const headers = ['庫位', 'SKU', 'SKU名稱', '條碼', '數量', '已確認', '不佔托盤',
+    '尺寸重量狀態', '尺寸有差異', 'SKU錯誤', '庫位冇貨', '托盤超高', '已影相', '備註', '確認時間']
+    .concat(cfIds.map(id => customFields[id].label));
+  const rows = [headers];
+  INVENTORY.forEach(it => {
+    const st = itemStates[itemKey(it)] || {};
+    const spec = skuSpecStatus[it.sku];
+    const cfValues = cfIds.map(id => {
+      const cf = customFields[id];
+      const valKey = cf.scope === 'sku' ? it.sku : itemKey(it);
+      const v = (customFieldValues[id] || {})[valKey];
+      return cf.type === 'button' ? (v ? '是' : '') : (v || '');
+    });
+    rows.push([
+      it.loc, it.sku, it.name, it.barcode, it.qty,
+      st.confirmedAt ? '是' : '否',
+      st.notAPallet ? '是' : '',
+      spec === 'correct' ? '正確' : spec === 'incorrect' ? '錯誤' : '',
+      st.sizeDiscrepancy ? '是' : '',
+      st.wrongSku ? '是' : '',
+      st.locationEmpty ? '是' : '',
+      st.overHeight ? '是' : '',
+      st.hasPhoto ? '是' : '',
+      st.remark || '',
+      st.confirmedAt ? new Date(st.confirmedAt).toLocaleString('zh-HK') : ''
+    ].concat(cfValues));
+  });
+  const extraKeys = Object.keys(extraItems);
+  if (extraKeys.length > 0) {
+    rows.push([]);
+    rows.push(['--- 新增記錄（唔喺系統庫存表）---']);
+    rows.push(['庫位', 'SKU', 'SKU名稱', '條碼', '件數', '備註', '新增時間']);
+    extraKeys.forEach(id => {
+      const e = extraItems[id];
+      rows.push([e.loc, e.sku, e.skuName, e.barcode, e.qty, e.remark || '',
+        e.addedAt ? new Date(e.addedAt).toLocaleString('zh-HK') : '']);
+    });
+  }
+  // Leading BOM so Excel opens the Chinese text as UTF-8 instead of garbling it.
+  const csv = '\uFEFF' + rows.map(r => r.map(csvCell).join(',')).join('\r\n');
+  const filename = 'inventory_report_' + new Date().toISOString().slice(0, 10) + '.csv';
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const confirmedCount = Object.values(itemStates).filter(s => s.confirmedAt).length;
+  try {
+    const result = await shareOrDownloadBlob(filename, blob);
+    if (result === 'shared') toast('已開啟分享 — 報表含全部233項（已確認 ' + confirmedCount + ' 項）' + (extraKeys.length ? '，另加' + extraKeys.length + '項新增記錄' : ''));
+    else if (result === 'downloaded') toast('已下載 ' + filename);
+  } catch (err) {
+    toast('匯出報表失敗：' + err.message);
+  }
+}
+
 async function importProgressFromFile(file) {
   try {
     const text = await file.text();
     const parsed = JSON.parse(text);
     const incomingItems = parsed && parsed.itemStates ? parsed.itemStates : parsed;
     const incomingSku = parsed && parsed.skuSpecStatus ? parsed.skuSpecStatus : {};
+    const incomingExtra = parsed && parsed.extraItems ? parsed.extraItems : {};
+    const incomingCf = parsed && parsed.customFields ? parsed.customFields : {};
+    const incomingCfVals = parsed && parsed.customFieldValues ? parsed.customFieldValues : {};
     if (!incomingItems || typeof incomingItems !== 'object') throw new Error('檔案格式不正確');
     itemStates = Object.assign({}, itemStates, incomingItems);
     skuSpecStatus = Object.assign({}, skuSpecStatus, incomingSku);
+    extraItems = Object.assign({}, extraItems, incomingExtra);
+    customFields = Object.assign({}, customFields, incomingCf);
+    customFieldValues = Object.assign({}, customFieldValues, incomingCfVals);
     render();
     toast('已匯入 ' + Object.keys(incomingItems).length + ' 項記錄');
   } catch (err) {
@@ -795,9 +1143,210 @@ function renderProgress() {
     '已核對 <b>' + done + '</b> / ' + total;
 }
 
+/* ---------- extra (off-system) location records ---------- */
+function renderExtraItems() {
+  const el = document.getElementById('extra-list');
+  if (!el) return;
+  const keys = Object.keys(extraItems);
+  if (keys.length === 0) { el.innerHTML = ''; return; }
+  keys.sort((a, b) => (extraItems[a].loc || '').localeCompare(extraItems[b].loc || ''));
+  let html = '<div class="loc-head">🆕 新增記錄（唔喺系統庫存表）· ' + keys.length + ' 項</div>';
+  keys.forEach(id => {
+    const e = extraItems[id];
+    html += '<div class="extra-item">';
+    html += '<button class="remove-extra-btn" data-remove-extra-id="' + escapeHtml(id) + '" type="button">✕</button>';
+    html += '<div class="tag">庫位 ' + escapeHtml(e.loc) + '</div>';
+    html += '<div class="n">' + escapeHtml(e.skuName || e.sku) + '</div>';
+    html += '<div class="s">' + escapeHtml(e.sku) + (e.barcode ? ' · ' + escapeHtml(e.barcode) : '') + ' · ' + escapeHtml(e.qty) + ' 件</div>';
+    if (e.remark) html += '<div class="r">' + escapeHtml(e.remark) + '</div>';
+    html += '</div>';
+  });
+  el.innerHTML = html;
+  document.querySelectorAll('[data-remove-extra-id]').forEach(btn => {
+    btn.addEventListener('click', () => handleRemoveExtraItem(btn.getAttribute('data-remove-extra-id')));
+  });
+}
+
+async function handleRemoveExtraItem(id) {
+  delete extraItems[id];
+  await saveItemStates();
+  render();
+  syncProgressToDrive();
+}
+
+/* ---------- custom fields (Settings) ---------- */
+function renderCustomFieldsList() {
+  const el = document.getElementById('custom-fields-list');
+  if (!el) return;
+  const ids = Object.keys(customFields);
+  if (ids.length === 0) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px">未有自訂欄位</div>';
+    return;
+  }
+  el.innerHTML = ids.map(id => {
+    const cf = customFields[id];
+    return '<div class="cf-list-item"><span>' + escapeHtml(cf.label) + '（' +
+      (cf.type === 'button' ? '掣' : '文字') + ' · ' + (cf.scope === 'sku' ? '跟SKU' : '跟庫位') + '）</span>' +
+      '<button data-remove-cf="' + escapeHtml(id) + '" type="button">刪除</button></div>';
+  }).join('');
+  el.querySelectorAll('[data-remove-cf]').forEach(btn => {
+    btn.addEventListener('click', () => handleRemoveCustomField(btn.getAttribute('data-remove-cf')));
+  });
+}
+
+async function handleAddCustomField() {
+  const label = document.getElementById('cf-label-input').value.trim();
+  const type = document.getElementById('cf-type-input').value;
+  const scope = document.getElementById('cf-scope-input').value;
+  if (!label) { toast('請輸入欄位名稱'); return; }
+  const id = 'cf_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+  customFields[id] = { id: id, label: label, type: type, scope: scope, createdAt: new Date().toISOString() };
+  await saveItemStates();
+  renderCustomFieldsList();
+  render();
+  syncProgressToDrive();
+  document.getElementById('cf-label-input').value = '';
+  toast('已新增自訂欄位「' + label + '」');
+}
+
+async function handleRemoveCustomField(id) {
+  const cf = customFields[id];
+  if (!cf) return;
+  if (!confirm('刪除「' + cf.label + '」會一併刪走所有已填嘅資料，確定？')) return;
+  delete customFields[id];
+  delete customFieldValues[id];
+  await saveItemStates();
+  renderCustomFieldsList();
+  render();
+  syncProgressToDrive();
+}
+
+/* ---------- Excel upload (replaces the whole inventory dataset) ---------- */
+async function handleExcelUpload() {
+  const fileInput = document.getElementById('excel-upload-input');
+  const file = fileInput.files[0];
+  if (!file) { toast('請先揀一個Excel檔案'); return; }
+  if (typeof XLSX === 'undefined') { toast('Excel解析元件未載入，請檢查網絡後重試'); return; }
+  if (!isSignedIn()) { toast('請先登入 Google Drive 先可以上傳庫存'); return; }
+  if (!confirm('上傳新Excel會完全取代而家嘅 ' + INVENTORY.length +
+    ' 項資料，同時清空所有已確認記錄（備註、確認狀態、自訂欄位內容、新增記錄等）。確定要繼續？')) return;
+  try {
+    const data = await file.arrayBuffer();
+    const wb = XLSX.read(data, { type: 'array' });
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+    const parsed = rows.map(r => ({
+      loc: String(r['Location'] || '').trim(),
+      sku: String(r['SKU Code'] || '').trim(),
+      barcode: String(r['SKU Barcode'] || '').trim(),
+      name: String(r['SKU Name'] || '').trim(),
+      qty: Number(r['Qty']) || 0,
+      l: Number(r['SKU Length']) || 0,
+      w: Number(r['SKU Width']) || 0,
+      h: Number(r['SKU Height']) || 0,
+      wt: Number(r['SKU Weight']) || 0
+    })).filter(r => r.sku && r.loc);
+    if (parsed.length === 0) throw new Error('讀唔到任何有效資料 — 檢查下欄名同「上傳並取代」上面嘅說明是否一致');
+    parsed.sort((a, b) => a.loc.localeCompare(b.loc));
+
+    INVENTORY = parsed;
+    SKU_LIST = buildSkuList();
+    lsSet('customInventoryData', JSON.stringify(INVENTORY)); // fast local cache
+    itemStates = {}; skuSpecStatus = {}; extraItems = {}; customFieldValues = {};
+    await saveItemStates();
+    render();
+    document.getElementById('current-inv-count').textContent = INVENTORY.length;
+    document.getElementById('app-settings-panel').style.display = 'none';
+    toast('已匯入 ' + parsed.length + ' 項新庫存資料，正上傳去你嘅私人Drive…');
+    try {
+      await saveInventoryToDrive();
+      toast('庫存主檔已存入你嘅私人 Google Drive');
+    } catch (err) {
+      toast('庫存已載入app，但上傳去Drive失敗（本機仍有備份）：' + err.message);
+    }
+    syncProgressToDrive();
+  } catch (err) {
+    toast('讀取Excel失敗：' + err.message);
+  }
+}
+
+async function handleRestoreDefaultInventory() {
+  if (!confirm('清空全部庫存資料（返到未上傳狀態），會一併清空而家嘅記錄，確定？')) return;
+  INVENTORY = INVENTORY_DEFAULT;
+  SKU_LIST = buildSkuList();
+  localStorage.removeItem('customInventoryData');
+  itemStates = {}; skuSpecStatus = {}; extraItems = {}; customFieldValues = {};
+  await saveItemStates();
+  render();
+  document.getElementById('current-inv-count').textContent = INVENTORY.length;
+  toast('已清空庫存資料');
+  if (isSignedIn()) {
+    try { await saveInventoryToDrive(); } catch (e) { /* best effort */ }
+  }
+  syncProgressToDrive();
+}
+
+function renderSkuDropdown(query) {
+  const dropdown = document.getElementById('sku-dropdown');
+  const q = query.trim().toLowerCase();
+  if (!q) { dropdown.style.display = 'none'; dropdown.innerHTML = ''; return; }
+  const matches = SKU_LIST.filter(s =>
+    s.sku.toLowerCase().includes(q) || s.name.toLowerCase().includes(q) || s.barcode.toLowerCase().includes(q)
+  ).slice(0, 8);
+  if (matches.length === 0) {
+    dropdown.style.display = 'block';
+    dropdown.innerHTML = '<div class="sku-dropdown-item" style="color:var(--ink-soft)">搵唔到相關SKU</div>';
+    return;
+  }
+  dropdown.style.display = 'block';
+  dropdown.innerHTML = matches.map(s =>
+    '<div class="sku-dropdown-item" data-pick-sku="' + escapeHtml(s.sku) + '">' +
+    '<div class="n">' + escapeHtml(s.name) + '</div>' +
+    '<div class="s">' + escapeHtml(s.sku) + ' · ' + escapeHtml(s.barcode) + '</div></div>'
+  ).join('');
+  dropdown.querySelectorAll('[data-pick-sku]').forEach(row => {
+    row.addEventListener('click', () => {
+      const sku = row.getAttribute('data-pick-sku');
+      newItemSelectedSku = SKU_LIST.find(s => s.sku === sku);
+      document.getElementById('sku-selected').textContent = newItemSelectedSku
+        ? '已選：' + newItemSelectedSku.sku + ' — ' + newItemSelectedSku.name : '';
+      document.getElementById('new-sku-search').value = newItemSelectedSku ? newItemSelectedSku.sku : '';
+      dropdown.style.display = 'none';
+    });
+  });
+}
+
+async function handleSaveNewItem() {
+  const loc = document.getElementById('new-loc-input').value.trim();
+  const qty = document.getElementById('new-qty-input').value.trim();
+  const remark = document.getElementById('new-remark-input').value.trim();
+  if (!loc) { toast('請輸入庫位'); return; }
+  if (!newItemSelectedSku) { toast('請喺SKU搜索結果度揀一個'); return; }
+  if (!qty) { toast('請輸入件數'); return; }
+  const id = 'extra_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+  extraItems[id] = {
+    loc: loc, sku: newItemSelectedSku.sku, skuName: newItemSelectedSku.name,
+    barcode: newItemSelectedSku.barcode, qty: qty, remark: remark,
+    addedAt: new Date().toISOString()
+  };
+  await saveItemStates();
+  render();
+  syncProgressToDrive();
+  toast('已新增庫位記錄');
+  // reset form
+  document.getElementById('new-loc-input').value = '';
+  document.getElementById('new-sku-search').value = '';
+  document.getElementById('new-qty-input').value = '';
+  document.getElementById('new-remark-input').value = '';
+  document.getElementById('sku-selected').textContent = '';
+  newItemSelectedSku = null;
+  document.getElementById('new-item-panel').style.display = 'none';
+}
+
 function render() {
   renderProgress();
   renderPhotoBatchButton();
+  renderExtraItems();
   const listEl = document.getElementById('list');
   const items = filteredItems();
   document.getElementById('search-clear').style.display = searchQuery ? 'block' : 'none';
@@ -857,10 +1406,11 @@ function renderItem(it, key, st, isOpen, confirmed) {
   const pending = pendingPhotos[key];
   const notPallet = confirmed && !!st.notAPallet;
   const hasDiscrepancy = !!st.sizeDiscrepancy;
+  const hasIssue = hasDiscrepancy || st.wrongSku || st.locationEmpty || st.overHeight;
   let cls = 'item';
   if (confirmed) cls += ' confirmed';
   if (notPallet) cls += ' not-pallet';
-  if (hasDiscrepancy) cls += ' discrepancy';
+  if (hasIssue) cls += ' discrepancy';
 
   let out = '<div class="' + cls + '" data-key="' + escapeHtml(key) + '">';
   out += '<div class="item-summary" data-toggle="' + escapeHtml(key) + '">';
@@ -868,6 +1418,9 @@ function renderItem(it, key, st, isOpen, confirmed) {
   out += '<div class="item-name">' + escapeHtml(it.name || '(無名稱)') + '</div>';
   out += '<div class="item-sub">' + escapeHtml(it.sku) + ' · ' + escapeHtml(it.barcode);
   if (hasDiscrepancy) out += '<span class="flag-chip">尺寸差異</span>';
+  if (st.wrongSku) out += '<span class="flag-chip">SKU錯誤</span>';
+  if (st.locationEmpty) out += '<span class="flag-chip">庫位冇貨</span>';
+  if (st.overHeight) out += '<span class="flag-chip">超高</span>';
   out += '</div>';
   out += '</div>';
   if (confirmed) {
@@ -932,10 +1485,31 @@ function renderItem(it, key, st, isOpen, confirmed) {
     }
 
     out += '<div class="flag-row">';
-    out += '<button class="flag-btn' + (hasDiscrepancy ? ' active' : '') + '" id="discrepancy-btn" type="button">';
-    out += (hasDiscrepancy ? '⚠ 已標記尺寸有差異' : '⚠ 標記尺寸有差異');
-    out += '</button>';
+    out += flagChip('discrepancy-btn', hasDiscrepancy, '⚠ 尺寸有差異');
+    out += flagChip('wrong-sku-btn', !!st.wrongSku, '❌ 呢度嘅貨唔係呢個SKU');
+    out += flagChip('empty-loc-btn', !!st.locationEmpty, '📭 呢個庫位冇嘢');
+    out += flagChip('over-height-btn', !!st.overHeight, '📏 托盤超高 (>1.8米)');
     out += '</div>';
+
+    const cfIds = Object.keys(customFields);
+    if (cfIds.length > 0) {
+      out += '<div class="custom-fields-row">';
+      cfIds.forEach(id => {
+        const cf = customFields[id];
+        const valKey = cf.scope === 'sku' ? it.sku : key;
+        const val = (customFieldValues[id] || {})[valKey];
+        if (cf.type === 'button') {
+          out += '<button class="flag-btn' + (val ? ' active' : '') + '" data-cf-btn="' + escapeHtml(id) + '" type="button">' +
+            escapeHtml(cf.label) + (val ? ' ✓' : '') + '</button>';
+        } else {
+          out += '<div class="cf-text-field">';
+          out += '<label class="field-label">' + escapeHtml(cf.label) + (cf.scope === 'sku' ? '（跟SKU）' : '') + '</label>';
+          out += '<input type="text" data-cf-text="' + escapeHtml(id) + '" value="' + escapeHtml(val || '') + '" placeholder="輸入' + escapeHtml(cf.label) + '">';
+          out += '</div>';
+        }
+      });
+      out += '</div>';
+    }
 
     if (confirmed) {
       out += '<button class="confirm-btn is-confirmed' + (notPallet ? ' secondary' : '') + '" id="confirm-btn" type="button">✓ ' +
@@ -950,6 +1524,10 @@ function renderItem(it, key, st, isOpen, confirmed) {
   }
   out += '</div>';
   return out;
+}
+
+function flagChip(id, active, label) {
+  return '<button class="flag-btn' + (active ? ' active' : '') + '" id="' + id + '" type="button">' + label + '</button>';
 }
 
 function specBox(val, label, skuStatus) {
@@ -1008,10 +1586,17 @@ function attachHandlers() {
   if (undoBtn) {
     undoBtn.addEventListener('click', () => handleUndo(expandedKey));
   }
-  const discrepancyBtn = document.getElementById('discrepancy-btn');
-  if (discrepancyBtn) {
-    discrepancyBtn.addEventListener('click', () => handleToggleDiscrepancy(expandedKey));
-  }
+  [['discrepancy-btn', 'sizeDiscrepancy'], ['wrong-sku-btn', 'wrongSku'],
+   ['empty-loc-btn', 'locationEmpty'], ['over-height-btn', 'overHeight']].forEach(([id, flag]) => {
+    const btn = document.getElementById(id);
+    if (btn) btn.addEventListener('click', () => handleToggleFlag(expandedKey, flag));
+  });
+  document.querySelectorAll('[data-cf-btn]').forEach(btn => {
+    btn.addEventListener('click', () => handleToggleCustomField(btn.getAttribute('data-cf-btn'), expandedKey));
+  });
+  document.querySelectorAll('[data-cf-text]').forEach(inp => {
+    inp.addEventListener('change', () => handleSetCustomFieldText(inp.getAttribute('data-cf-text'), expandedKey, inp.value));
+  });
   const specCorrectBtn = document.getElementById('spec-correct-btn');
   if (specCorrectBtn) {
     specCorrectBtn.addEventListener('click', () => handleSetSkuSpecStatus(expandedKey, 'correct'));
@@ -1081,10 +1666,40 @@ async function handleConfirm(key, notAPallet) {
 }
 
 
-async function handleToggleDiscrepancy(key) {
+async function handleToggleFlag(key, flagName) {
   if (!key) return;
   itemStates[key] = itemStates[key] || {};
-  itemStates[key].sizeDiscrepancy = !itemStates[key].sizeDiscrepancy;
+  itemStates[key][flagName] = !itemStates[key][flagName];
+  await saveItemStates();
+  render();
+  syncProgressToDrive();
+}
+
+async function handleToggleCustomField(fieldId, key) {
+  const cf = customFields[fieldId];
+  if (!cf || !key) return;
+  const it = INVENTORY.find(x => itemKey(x) === key);
+  if (!it) return;
+  const valKey = cf.scope === 'sku' ? it.sku : key;
+  customFieldValues[fieldId] = customFieldValues[fieldId] || {};
+  customFieldValues[fieldId][valKey] = !customFieldValues[fieldId][valKey];
+  await saveItemStates();
+  render();
+  syncProgressToDrive();
+  if (cf.scope === 'sku') {
+    const count = INVENTORY.filter(x => x.sku === it.sku).length;
+    if (count > 1) toast('「' + cf.label + '」已套用到全部 ' + count + ' 個「' + it.sku + '」庫位');
+  }
+}
+
+async function handleSetCustomFieldText(fieldId, key, value) {
+  const cf = customFields[fieldId];
+  if (!cf || !key) return;
+  const it = INVENTORY.find(x => itemKey(x) === key);
+  if (!it) return;
+  const valKey = cf.scope === 'sku' ? it.sku : key;
+  customFieldValues[fieldId] = customFieldValues[fieldId] || {};
+  customFieldValues[fieldId][valKey] = value;
   await saveItemStates();
   render();
   syncProgressToDrive();
@@ -1134,19 +1749,47 @@ function updateGoogleAuthUI() {
     authRow.style.display = 'none';
     updateSyncIndicator(null);
     document.getElementById('sync-status').textContent = 'Google Drive：請先設定 Client ID';
+    updateGateState();
     return;
   }
   setupPanel.style.display = 'none';
   authRow.style.display = 'flex';
   if (isSignedIn()) {
-    loginBtn.textContent = '✓ 已登入 Google';
+    loginBtn.textContent = '✓ ' + (signedInEmail || '已登入 Google');
     loginBtn.classList.add('signed-in');
   } else {
     loginBtn.textContent = '🔑 登入 Google';
     loginBtn.classList.remove('signed-in');
     updateSyncIndicator('signedout');
   }
+  updateGateState();
 }
+
+/* Hard gate: the app is unusable (search/add/confirm/list all hidden) unless
+   Google Drive is actively connected. If the token expires mid-session this
+   re-locks automatically the next time updateGoogleAuthUI() runs (called
+   from driveApiFetch's 401 handler and from the periodic check below). */
+function updateGateState() {
+  const gated = document.getElementById('gated-content');
+  const extraList = document.getElementById('extra-list');
+  const listEl = document.getElementById('list');
+  const msg = document.getElementById('gate-message');
+  const signed = isSignedIn();
+  gated.style.display = signed ? 'block' : 'none';
+  extraList.style.display = signed ? 'block' : 'none';
+  listEl.style.display = signed ? 'block' : 'none';
+  msg.style.display = signed ? 'none' : 'block';
+  if (!signed) {
+    expandedKey = null; // close any open item so nothing is left mid-edit while locked
+    msg.textContent = !googleClientId
+      ? '🔒 要連接住 Google Drive先可以開始核對 —— 請先設定 Client ID，再撳「登入 Google」。'
+      : '🔒 Google Drive未連接、已斷線，或者戶口未經授權 —— 請撳上面「登入 Google」（要用授權過嘅Email）。你之前已確認嘅記錄冇有流失，登入返即可繼續。';
+  }
+}
+
+// Catches a token silently expiring while the app just sits open (no Drive
+// call happens to trigger the 401 path on its own).
+setInterval(() => { if (googleClientId) updateGoogleAuthUI(); }, 20000);
 
 document.getElementById('save-client-id-btn').addEventListener('click', () => {
   const val = document.getElementById('client-id-input').value.trim();
@@ -1159,8 +1802,7 @@ document.getElementById('save-client-id-btn').addEventListener('click', () => {
 
 document.getElementById('settings-link').addEventListener('click', () => {
   const panel = document.getElementById('gsetup-panel');
-  const input = document.getElementById('client-id-input');
-  input.value = googleClientId || '';
+  document.getElementById('client-id-input').value = googleClientId || '';
   panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
 });
 
@@ -1170,9 +1812,26 @@ document.getElementById('login-btn').addEventListener('click', async () => {
   btn.textContent = '登入緊…';
   try {
     await ensureAccessToken(true);
+    const email = await fetchSignedInEmail();
+    if (!isEmailAuthorized(email)) {
+      accessToken = null;
+      tokenExpiresAt = 0;
+      signedInEmail = null;
+      updateGoogleAuthUI();
+      const panel = document.getElementById('debug-panel');
+      panel.style.display = 'block';
+      panel.textContent = '❌ 「' + (email || '未知帳戶') + '」未經授權，唔可以用呢個app。\n\n如果呢個係啱嘅帳戶，去「⚙」設定入面嘅「授權Email」加返佢。';
+      toast('呢個Google戶口未經授權');
+      return;
+    }
+    signedInEmail = email;
     updateGoogleAuthUI();
-    toast('已登入 Google');
-    // Pull anything saved from another device, then push local state back up.
+    toast('已登入 Google（' + email + '）');
+    // Pull the real inventory + progress from Drive (private to this account).
+    const gotInv = await loadInventoryFromDrive();
+    if (!gotInv && INVENTORY.length === 0) {
+      toast('你嘅Drive未有庫存資料 — 去「⚙」設定上傳Excel先');
+    }
     await loadItemStatesFromDrive();
     render();
     syncProgressToDrive();
@@ -1187,6 +1846,52 @@ document.getElementById('login-btn').addEventListener('click', async () => {
 /* ---------- init ---------- */
 document.getElementById('test-drive-btn').addEventListener('click', testDriveConnection);
 document.getElementById('export-btn').addEventListener('click', exportProgress);
+document.getElementById('export-csv-btn').addEventListener('click', exportCsvReport);
+document.getElementById('add-new-toggle-btn').addEventListener('click', () => {
+  const panel = document.getElementById('new-item-panel');
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+});
+document.getElementById('new-sku-search').addEventListener('input', (e) => {
+  newItemSelectedSku = null;
+  document.getElementById('sku-selected').textContent = '';
+  renderSkuDropdown(e.target.value);
+});
+document.getElementById('save-new-item-btn').addEventListener('click', handleSaveNewItem);
+document.getElementById('app-settings-toggle-btn').addEventListener('click', () => {
+  const panel = document.getElementById('app-settings-panel');
+  const showing = panel.style.display !== 'none';
+  panel.style.display = showing ? 'none' : 'block';
+  if (!showing) {
+    document.getElementById('current-inv-count').textContent = INVENTORY.length;
+    renderCustomFieldsList();
+    const ownerEls = ['owner-only-title', 'owner-only-hint', 'owner-only-steps', 'colleague-email-input', 'save-colleagues-btn', 'owner-only-divider'];
+    if (isOwner()) {
+      ownerEls.forEach(id => { document.getElementById(id).style.display = 'block'; });
+      document.getElementById('owner-email-display').textContent = OWNER_EMAIL;
+      document.getElementById('colleague-email-input').value = lsGet('authorizedEmails') || '';
+    } else {
+      ownerEls.forEach(id => { document.getElementById(id).style.display = 'none'; });
+    }
+  }
+});
+document.getElementById('save-colleagues-btn').addEventListener('click', () => {
+  const val = document.getElementById('colleague-email-input').value.trim();
+  saveAuthorizedEmails(val);
+  toast('已更新同事授權名單（記得都要喺 Google Cloud Console 加佢哋做test user，同分享Drive資料夾）');
+});
+document.getElementById('reset-drive-cache-btn').addEventListener('click', async () => {
+  if (!isSignedIn()) { toast('請先登入 Google'); return; }
+  resetCachedDriveIds();
+  toast('清走緊本機快取，重新搵緊資料夾…');
+  const gotInv = await loadInventoryFromDrive();
+  await loadItemStatesFromDrive();
+  render();
+  document.getElementById('current-inv-count').textContent = INVENTORY.length;
+  toast(gotInv ? '搵到 ' + INVENTORY.length + ' 項庫存資料' : '搵唔到共用嘅庫存資料 — 確認個Drive資料夾已經分享咗畀你');
+});
+document.getElementById('excel-upload-btn').addEventListener('click', handleExcelUpload);
+document.getElementById('restore-default-btn').addEventListener('click', handleRestoreDefaultInventory);
+document.getElementById('add-custom-field-btn').addEventListener('click', handleAddCustomField);
 document.getElementById('import-btn').addEventListener('click', () => {
   document.getElementById('import-file-input').click();
 });
@@ -1197,6 +1902,13 @@ document.getElementById('import-file-input').addEventListener('change', (e) => {
 });
 (async function init() {
   loadGoogleClientId();
+  const savedInv = lsGet('customInventoryData');
+  if (savedInv) {
+    try {
+      const parsedInv = JSON.parse(savedInv);
+      if (Array.isArray(parsedInv) && parsedInv.length) { INVENTORY = parsedInv; SKU_LIST = buildSkuList(); }
+    } catch (e) { /* fall back to the default embedded inventory */ }
+  }
   render(); // show the list immediately with empty state while data loads
   await loadItemStates(); // localStorage — instant, always available on a real hosted page
   updateLocalStorageIndicator();
