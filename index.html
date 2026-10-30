@@ -409,9 +409,17 @@ const DRIVE_PROGRESS_FILENAME = 'inventory_check_progress.json';
 const DRIVE_INVENTORY_FILENAME = 'inventory_master.json';
 
 function itemKey(it) { return it.loc + '|' + it.sku + '|' + it.barcode; }
-function photoFilename(it, index) {
+function photoFilename(it, index, ext) {
   const base = it ? it.sku + '-' + it.loc : 'photo';
-  return (index > 0 ? base + '-' + (index + 1) : base) + '.jpg';
+  return (index > 0 ? base + '-' + (index + 1) : base) + (ext || '.jpg');
+}
+function photoExt(file) {
+  const t = (file && file.type || '').toLowerCase();
+  if (t.indexOf('png') >= 0) return '.png';
+  if (t.indexOf('heic') >= 0) return '.heic';
+  if (t.indexOf('heif') >= 0) return '.heif';
+  if (t.indexOf('webp') >= 0) return '.webp';
+  return '.jpg';
 }
 
 /* ---------- persistence ----------
@@ -485,7 +493,7 @@ let signedInEmail = null;
 // is always authorized and is the only one who can manage the colleague
 // allow-list below — this can't be bypassed by editing localStorage, because
 // it's baked into the code and checked against your real signed-in identity.
-const OWNER_EMAIL = 'yanwingidy@gmail.com';
+const OWNER_EMAIL = 'YOUR_EMAIL_HERE@gmail.com';
 
 function isOwner() { return signedInEmail && signedInEmail.toLowerCase() === OWNER_EMAIL.toLowerCase(); }
 
@@ -597,13 +605,17 @@ async function getOrCreateDriveFolder() {
   return id;
 }
 
-async function uploadPhotoToDrive(base64, filename, folderId) {
+async function uploadPhotoToDrive(file, filename, folderId) {
+  // Original file, uploaded as binary (no resize, no re-encode, no base64).
+  const mime = file.type || 'image/jpeg';
   const boundary = 'warehouseinvbound' + Date.now();
-  const metadata = JSON.stringify({ name: filename, parents: [folderId], mimeType: 'image/jpeg' });
-  const body =
+  const metadata = JSON.stringify({ name: filename, parents: [folderId], mimeType: mime });
+  const body = new Blob([
     '--' + boundary + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + metadata + '\r\n' +
-    '--' + boundary + '\r\nContent-Type: image/jpeg\r\nContent-Transfer-Encoding: base64\r\n\r\n' + base64 + '\r\n' +
-    '--' + boundary + '--';
+    '--' + boundary + '\r\nContent-Type: ' + mime + '\r\n\r\n',
+    file,
+    '\r\n--' + boundary + '--'
+  ]);
   const res = await driveApiFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
     method: 'POST',
     headers: { 'Content-Type': 'multipart/related; boundary=' + boundary },
@@ -628,8 +640,8 @@ async function autoUploadPhoto(key, idx) {
   renderPhotoBatchButton();
   try {
     const folderId = await getOrCreateDriveFolder();
-    const filename = photoFilename(it, idx);
-    await uploadPhotoToDrive(photo.base64, filename, folderId);
+    const filename = photoFilename(it, idx, photoExt(photo.file));
+    await uploadPhotoToDrive(photo.file, filename, folderId);
     photo.uploadStatus = 'uploaded';
     toast(filename + ' 已上傳 Drive');
   } catch (err) {
@@ -859,27 +871,22 @@ async function syncProgressToDrive() {
 }
 
 /* ---------- photo capture & resize ---------- */
-function readAndResizeImage(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error('讀取相片失敗'));
-    reader.onload = () => {
-      const img = new Image();
-      img.onerror = () => reject(new Error('相片格式錯誤'));
-      img.onload = () => {
-        const maxW = 640;
-        const scale = Math.min(1, maxW / img.width);
-        const w = Math.round(img.width * scale);
-        const h = Math.round(img.height * scale);
-        const canvas = document.createElement('canvas');
-        canvas.width = w; canvas.height = h;
-        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.45);
-        resolve(dataUrl);
-      };
-      img.src = reader.result;
+function makeThumbnail(file) {
+  // Small preview only (display). The original file is what gets uploaded.
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(''); };
+    img.onload = () => {
+      const scale = Math.min(1, 240 / img.width);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL('image/jpeg', 0.7));
     };
-    reader.readAsDataURL(file);
+    img.src = url;
   });
 }
 
@@ -1030,8 +1037,8 @@ async function sharePendingPhoto(key) {
   try {
     const files = [];
     for (let i = 0; i < pending.length; i++) {
-      const blob = await dataUrlToBlob(pending[i].dataUrl);
-      files.push(new File([blob], photoFilename(it, i), { type: 'image/jpeg' }));
+      const orig = pending[i].file;
+      files.push(new File([orig], photoFilename(it, i, photoExt(orig)), { type: orig.type || 'image/jpeg' }));
     }
     let result;
     if (navigator.canShare && navigator.canShare({ files })) {
@@ -1083,8 +1090,7 @@ async function shareAllPhotos() {
       const photos = capturedPhotos[k];
       for (let i = 0; i < photos.length; i++) {
         const p = photos[i];
-        const blob = await dataUrlToBlob(p.dataUrl);
-        files.push(new File([blob], photoFilename({ sku: p.sku, loc: p.loc }, i), { type: 'image/jpeg' }));
+        files.push(new File([p.file], photoFilename({ sku: p.sku, loc: p.loc }, i, photoExt(p.file)), { type: p.file.type || 'image/jpeg' }));
       }
     }
     if (navigator.canShare && navigator.canShare({ files })) {
@@ -1555,14 +1561,13 @@ function attachHandlers() {
       const file = e.target.files[0];
       if (!file) return;
       try {
-        const dataUrl = await readAndResizeImage(file);
-        const base64 = dataUrl.split(',')[1];
+        const dataUrl = await makeThumbnail(file);
         const it = INVENTORY.find(x => itemKey(x) === expandedKey);
         pendingPhotos[expandedKey] = pendingPhotos[expandedKey] || [];
         const newIdx = pendingPhotos[expandedKey].length;
-        pendingPhotos[expandedKey].push({ dataUrl, base64, uploadStatus: 'pending' });
+        pendingPhotos[expandedKey].push({ dataUrl, file, uploadStatus: 'pending' });
         capturedPhotos[expandedKey] = capturedPhotos[expandedKey] || [];
-        capturedPhotos[expandedKey].push({ dataUrl, base64, sku: it ? it.sku : '', loc: it ? it.loc : '', ts: Date.now() });
+        capturedPhotos[expandedKey].push({ dataUrl, file, sku: it ? it.sku : '', loc: it ? it.loc : '', ts: Date.now() });
         await savePendingPhotoQueue();
         render();
         // keep item expanded after re-render
