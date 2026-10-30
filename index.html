@@ -1250,10 +1250,20 @@ async function handleExcelUpload() {
       l: Number(r['SKU Length']) || 0,
       w: Number(r['SKU Width']) || 0,
       h: Number(r['SKU Height']) || 0,
-      wt: Number(r['SKU Weight']) || 0
+      wt: Number(r['SKU Weight']) || 0,
+      sortKey: String(r['FullSortKey'] == null ? '' : r['FullSortKey']).trim()
     })).filter(r => r.sku && r.loc);
     if (parsed.length === 0) throw new Error('讀唔到任何有效資料 — 檢查下欄名同「上傳並取代」上面嘅說明是否一致');
-    parsed.sort((a, b) => a.loc.localeCompare(b.loc));
+    // Sort by the FullSortKey column (natural/numeric-aware); fall back to Location if blank
+    const hasSortKey = parsed.some(r => r.sortKey);
+    const nat = { numeric: true, sensitivity: 'base' };
+    parsed.sort((a, b) => {
+      if (hasSortKey) {
+        const c = (a.sortKey || a.loc).localeCompare(b.sortKey || b.loc, undefined, nat);
+        if (c !== 0) return c;
+      }
+      return a.loc.localeCompare(b.loc, undefined, nat);
+    });
 
     INVENTORY = parsed;
     SKU_LIST = buildSkuList();
